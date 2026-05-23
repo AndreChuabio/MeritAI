@@ -33,9 +33,10 @@ precompute:
 meta:
 	uv run python scripts/meta_flex.py
 
-# Push to a new private GitHub repo.
+# Push to a new public GitHub repo (hackathon -> Devpost needs public).
 push:
-	gh repo create AndreChuabio/agentichack --private --source=. --push
+	gh repo create AndreChuabio/agentichack --public --source=. --push \
+	  --description "Drop a GitHub repo. Get a research paper draft. Built at NYC Agentic Engineering Hack 2026 at Datadog HQ."
 
 # Tidy local caches.
 clean:
