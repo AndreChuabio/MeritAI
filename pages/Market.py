@@ -117,7 +117,7 @@ with tab_brand:
         "About",
         value=st.session_state.get(
             "brand_about",
-            "I want to work on building my career and work towards O1 visa.",
+            "I want to work on building my career and work towards expedited extraordinary abilities visa.",
         ),
         placeholder="3-5 sentences. Who you are, what you work on, who you help.",
         height=120,
