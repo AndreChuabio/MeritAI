@@ -32,6 +32,7 @@ class PaperMeta:
 
 
 _CACHE: dict[str, PaperMeta] = {}
+_ARXIV_CLIENT = arxiv.Client(page_size=10, delay_seconds=1.0, num_retries=2)
 
 
 def candidates_from_clickhouse(
@@ -68,7 +69,7 @@ def lookup_paper(arxiv_id: str) -> PaperMeta | None:
         return _CACHE[arxiv_id]
     try:
         search = arxiv.Search(id_list=[arxiv_id])
-        result = next(search.results(), None)
+        result = next(_ARXIV_CLIENT.results(search), None)
     except Exception:  # noqa: BLE001 -- arxiv lib is flaky over conf wifi
         return None
     if result is None:

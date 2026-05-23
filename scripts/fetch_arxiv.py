@@ -43,6 +43,9 @@ QUERIES = [
 OUT_PATH = Path(__file__).resolve().parent.parent / "data" / "arxiv_seed.json"
 
 
+_ARXIV_CLIENT = arxiv.Client(page_size=50, delay_seconds=3.0, num_retries=3)
+
+
 def fetch_one(query: str, max_results: int) -> list[dict]:
     print(f"  query: {query!r} (n={max_results})")
     search = arxiv.Search(
@@ -51,7 +54,7 @@ def fetch_one(query: str, max_results: int) -> list[dict]:
         sort_by=arxiv.SortCriterion.Relevance,
     )
     out: list[dict] = []
-    for result in search.results():
+    for result in _ARXIV_CLIENT.results(search):
         # Strip the version suffix from the arxiv id (we want the canonical id).
         aid = result.entry_id.rsplit("/", 1)[-1].split("v")[0]
         out.append(
@@ -77,8 +80,9 @@ def main() -> None:
             continue
         for r in rows:
             all_rows.setdefault(r["id"], r)
-        # arxiv API rate-limit is 1 query every ~3 seconds.
-        time.sleep(3.0)
+        # arxiv.Client already throttles via delay_seconds; small extra pause
+        # between distinct queries keeps us well under the rate limit.
+        time.sleep(1.0)
 
     deduped = list(all_rows.values())
     deduped.sort(key=lambda r: r["year"], reverse=True)
