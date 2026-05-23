@@ -188,11 +188,12 @@ POSTs entries that don't exist.
 
 ### Tracing
 ```python
-with trace.step("senso.generate", purpose=purpose, channel=channel) as s:
+# trace.step signature in this repo: step(session_id, kind, **payload) -> Iterator[dict]
+with trace.step(sid, "senso.generate", purpose=purpose, channel=channel) as ctx:
     job_id = senso.generate_sample(content_type_id, context)
-    s.set_attr("job_id", job_id)
-    md = senso.poll_until_done(job_id, timeout=30)
-    s.set_attr("draft_chars", len(md))
+    ctx["job_id"] = job_id
+    md = senso.poll_until_done(job_id, timeout_s=30)
+    ctx["draft_chars"] = len(md)
 ```
 
 ## 7. Tab 3: Track (Visa Progress)
@@ -332,10 +333,10 @@ Auth header: `X-API-Key: <SENSO_API_KEY>` (per docs).
 
 Existing pattern preserved. Each Senso request:
 ```python
-with trace.step("senso.<verb>", **kwargs) as s:
+with trace.step(sid, "senso.<verb>", **kwargs) as ctx:
     resp = self._http.request(...)
-    s.set_attr("status_code", resp.status_code)
-    s.set_attr("duration_ms", duration_ms)
+    ctx["status_code"] = resp.status_code
+    ctx["duration_ms"] = duration_ms
 ```
 Lapdog captures locally; `DD_API_KEY` forwards to Datadog Cloud as today.
 
