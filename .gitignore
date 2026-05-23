@@ -1,0 +1,45 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.python-version
+*.egg-info/
+dist/
+build/
+
+# uv
+.uv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Data: keep seed + cache structure, ignore large dumps
+data/*.large.json
+data/cache/
+
+# Submission build artifacts
+submission/*.pdf
+submission/*.aux
+submission/*.log
+submission/*.out
+
+# Claude / harness
+.claude/settings.local.json

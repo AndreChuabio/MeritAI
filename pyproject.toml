@@ -1,0 +1,16 @@
+[project]
+name = "agentichack"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.104.1",
+    "arxiv>=4.0.0",
+    "clickhouse-connect>=1.0.1",
+    "google-genai>=2.6.0",
+    "openai>=2.38.0",
+    "pydantic>=2.13.4",
+    "pygithub>=2.9.1",
+    "python-dotenv>=1.2.2",
+    "streamlit>=1.57.0",
+    "tiktoken>=0.13.0",
+]
