@@ -46,6 +46,8 @@ if "chosen_venue" not in st.session_state:
     st.session_state.chosen_venue = None
 if "sections" not in st.session_state:
     st.session_state.sections = {}
+if "skill_pack" not in st.session_state:
+    st.session_state.skill_pack = None
 
 session_id = st.session_state.session_id
 
@@ -66,6 +68,7 @@ _STAGE_COLOR = {
     "match": "#10b981",    # green
     "citation": "#f59e0b", # amber
     "draft": "#8b5cf6",    # purple
+    "skill": "#06b6d4",    # cyan (skill extraction)
     "llm": "#94a3b8",      # slate (hello-world ping)
     "demo": "#ec4899",     # pink
 }
@@ -319,6 +322,7 @@ with left:
                     st.session_state.venues = venues
                     st.session_state.chosen_venue = venues[0] if venues else None
                     st.session_state.sections = {}
+                    st.session_state.skill_pack = None
                     if not venues:
                         status.update(
                             label="No CFPs matched within deadline horizon",
@@ -358,6 +362,89 @@ with left:
                         if st.button(f"Draft for {venue.name}", key=f"draft_{venue.id}"):
                             st.session_state.chosen_venue = venue
                             st.session_state.sections = {}
+
+        # Skill extraction: turn the same repo bundle into publishable
+        # Claude Skills + MCP build prompts. Reuses the already-fetched
+        # bundle so there's no second GitHub round-trip.
+        if st.session_state.bundle is not None:
+            st.subheader("Extract reusable skills")
+            st.caption(
+                "Find pieces of this repo that could be lifted out as a "
+                "Claude Skill or MCP server. Downloads as a zip of SKILL.md "
+                "files + ready-to-paste MCP build prompts."
+            )
+            extract_clicked = st.button(
+                "Extract skills from repo",
+                key="extract_skills_btn",
+                use_container_width=True,
+            )
+            if extract_clicked:
+                from paperpilot.skill_extract import extract_skills
+
+                with st.status("Analyzing repo for extractable skills...", expanded=True) as status:
+                    try:
+                        pack = extract_skills(st.session_state.bundle, session_id)
+                        st.session_state.skill_pack = pack
+                        if not pack.skills:
+                            status.update(
+                                label="No extractable skills found in this repo",
+                                state="error",
+                            )
+                        else:
+                            status.update(
+                                label=f"Found {len(pack.skills)} extractable skill(s)",
+                                state="complete",
+                            )
+                    except Exception as exc:  # noqa: BLE001
+                        status.update(label=f"Failed: {exc}", state="error")
+                        st.exception(exc)
+
+            if st.session_state.skill_pack and st.session_state.skill_pack.skills:
+                from paperpilot.skill_render import build_skill_pack_zip
+
+                pack = st.session_state.skill_pack
+                source_repo = (
+                    f"{st.session_state.bundle.owner}/{st.session_state.bundle.name}"
+                )
+
+                # Card grid
+                ncols = min(len(pack.skills), 2)
+                skill_cols = st.columns(ncols)
+                for i, skill in enumerate(pack.skills):
+                    with skill_cols[i % ncols]:
+                        with st.container(border=True):
+                            kind_badge = {
+                                "claude_skill": "Claude Skill",
+                                "mcp_tool": "MCP Tool",
+                                "both": "Skill + MCP",
+                            }.get(skill.kind, skill.kind)
+                            st.markdown(f"**{skill.name}**")
+                            st.caption(f"{kind_badge} · effort: {skill.effort}")
+                            st.write(skill.description)
+                            with st.expander("Why extract it"):
+                                st.write(skill.rationale)
+                                if skill.source_files:
+                                    st.markdown("**Source files:**")
+                                    for p in skill.source_files:
+                                        st.code(p, language="text")
+                                if skill.suggested_tool_signatures:
+                                    st.markdown("**Suggested tools:**")
+                                    for sig in skill.suggested_tool_signatures:
+                                        st.code(
+                                            f"{sig.name}{sig.args}",
+                                            language="python",
+                                        )
+                                        st.caption(sig.summary)
+
+                zip_bytes = build_skill_pack_zip(pack, source_repo)
+                st.download_button(
+                    "Download skill pack (.zip)",
+                    data=zip_bytes,
+                    file_name=f"{st.session_state.bundle.name}_skills.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                    key="skill_pack_download",
+                )
 
         # Draft the paper
         if (

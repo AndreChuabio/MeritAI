@@ -15,6 +15,7 @@ PaperPilot turns a GitHub repository into a venue-targeted academic paper draft:
 3. **Match.** Embeds the summary and ranks 41 hand-curated CFPs (NeurIPS, ICLR, ICML, ACL, EMNLP, KDD, CVPR, ML4H, MICCAI, CHIL, AMIA, workshops, journals) in ClickHouse Cloud by semantic fit + deadline proximity.
 4. **Draft.** Streams a paper section-by-section through Claude: abstract, intro, related work, method. The related-work section is citation-grounded — the model is given a pre-filtered list of arxiv candidates from ClickHouse and a strict "cite ONLY these" instruction. Any unsanctioned `[arxiv:...]` marker is stripped post-hoc with a visible warning.
 5. **Export.** Downloads as LaTeX + BibTeX, ready to open in Overleaf.
+6. **Extract skills (bonus).** A second pass over the same repo bundle identifies 2-5 reusable units inside the code -- agent loops, retrieval primitives, citation guards, etc. -- and packages each into a `SKILL.md` (drop into `~/.claude/skills/<name>/`) plus a ready-to-paste prompt for Claude Code to scaffold an MCP server. Download as a zip.
 
 Every LLM call is captured by **Lapdog** (Datadog's local LLM-observability CLI) and forwarded to Datadog cloud with one env var. The UI also surfaces a live **cost + token pill** on every run: $X.XXXX spent, N tokens in / out, summed across Gemini ingest and all four Claude draft sections.
 
@@ -99,7 +100,7 @@ make dev
 
 ### Demo flows on the Streamlit UI
 
-- **Pipeline tab.** Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). "Ingest + match venues" runs the full Gemini summary + ClickHouse venue ranking. Pick a venue → live streamed Claude draft with the cost pill climbing in the right rail.
+- **Pipeline tab.** Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). "Ingest + match venues" runs the full Gemini summary + ClickHouse venue ranking. Pick a venue → live streamed Claude draft with the cost pill climbing in the right rail. After ingest you can also click "Extract skills from repo" -- a second Gemini pass on the same bundle that produces a downloadable zip of `SKILL.md` files + ready-to-paste MCP build prompts, one per extractable capability.
 - **Load demo cache.** Falls back to a precomputed `data/demo_cache.json` snapshot. Drips synthetic trace events with realistic timings (~6s total) so the agent appears to work even on a flaky network — paper draft + venue card + full trace land instantly afterward.
 - **Phase 1 hello-world tab.** One-button `make ping` equivalent. Single LLM round-trip to verify Gateway + Lapdog + Datadog wires are alive before doing a real run.
 
@@ -121,6 +122,8 @@ agentichack/
     cfp_match.py                  cosineDistance venue ranking
     arxiv_lookup.py               citation candidate pre-filter (ClickHouse + arxiv)
     draft.py                      section streaming + citation strip + tiktoken/cost fallback
+    skill_extract.py              repo bundle -> structured SkillPack via Gemini
+    skill_render.py               SkillPack -> SKILL.md + mcp_build_prompt.md zip (pure templating)
     latex_export.py               .tex + .bib assembly
     pipeline.py                   end-to-end orchestrator + demo cache writer (totals rolled up)
     trace.py                      log_event + step context manager + in-process buffer
