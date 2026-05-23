@@ -62,3 +62,21 @@ push:
 # Tidy local caches.
 clean:
 	rm -rf __pycache__ paperpilot/__pycache__ scripts/__pycache__ .pytest_cache
+
+# Run the test suite.
+test:
+	uv run pytest -q
+
+# Idempotently seed Senso content types (workspace: Agentic-hack).
+# Requires SENSO_API_KEY in .env.
+seed-senso:
+	uv run python -m scripts.seed_senso
+
+# Print the outreach demo rehearsal script.
+outreach-demo:
+	@echo "Outreach demo rehearsal:"
+	@echo "  1. Brand tab: confirm pre-synced brand kit for 'Nikki' loads."
+	@echo "  2. Outreach tab: pick VISA, type 'apply to keynote at ML4H 2026', Generate."
+	@echo "  3. Track tab: confirm score, Scholar climbs to 14/20, drafts list shows."
+	@echo ""
+	@echo "If anything 500s, fall back to: DEMO_MODE=true make dev."

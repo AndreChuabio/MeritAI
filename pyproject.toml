@@ -15,4 +15,15 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "streamlit>=1.57.0",
     "tiktoken>=0.13.0",
+    "requests>=2.32.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "responses>=0.25.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
