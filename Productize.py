@@ -28,6 +28,22 @@ from paperpilot.pipeline import load_demo_cache
 load_dotenv()
 
 st.set_page_config(page_title="Productize", page_icon="📄", layout="wide")
+
+# Compact sidebar — narrower nav so the main canvas gets the space.
+st.markdown(
+    """<style>
+    [data-testid="stSidebar"] {
+        width: 190px !important;
+        min-width: 190px !important;
+        max-width: 190px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] li {
+        font-size: 0.85rem !important;
+    }
+    </style>""",
+    unsafe_allow_html=True,
+)
+
 st.title("Productize")
 st.caption(
     "GitHub repo → Gemini summary → ClickHouse venue match → Claude paper draft. "

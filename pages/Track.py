@@ -30,6 +30,21 @@ from paperpilot.outreach.senso import Senso, SensoAPIError
 load_dotenv()
 
 st.set_page_config(page_title="Track — Visa Progress", page_icon="🛂", layout="wide")
+
+st.markdown(
+    """<style>
+    [data-testid="stSidebar"] {
+        width: 190px !important;
+        min-width: 190px !important;
+        max-width: 190px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] li {
+        font-size: 0.85rem !important;
+    }
+    </style>""",
+    unsafe_allow_html=True,
+)
+
 st.title("🛂 Track — O-1 + NIW Progress")
 st.caption(
     "Every signal we have on your case, mapped to USCIS extraordinary-ability + "

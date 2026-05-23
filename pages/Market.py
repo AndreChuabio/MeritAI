@@ -26,6 +26,21 @@ load_dotenv()
 
 
 st.set_page_config(page_title="Market — Outreach Drafts", page_icon="📣", layout="wide")
+
+st.markdown(
+    """<style>
+    [data-testid="stSidebar"] {
+        width: 190px !important;
+        min-width: 190px !important;
+        max-width: 190px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stSidebarNav"] li {
+        font-size: 0.85rem !important;
+    }
+    </style>""",
+    unsafe_allow_html=True,
+)
+
 st.title("📣 Market")
 st.caption(
     "Personal-brand profile + purpose-driven outreach drafts. "
