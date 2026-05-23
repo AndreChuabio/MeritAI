@@ -74,13 +74,14 @@ with tab_brand:
         st.caption("Define your voice, story, and links. We use this to draft every outreach.")
     with header_r:
         st.markdown("**Already have a profile?**")
-        load_c1, load_c2, load_c3 = st.columns([2, 2, 1])
-        load_first = load_c1.text_input("First name", key="load_first", label_visibility="collapsed", placeholder="First")
-        load_last = load_c2.text_input("Last name", key="load_last", label_visibility="collapsed", placeholder="Last")
-        if load_c3.button("Load My Profile", disabled=not _HAS_SENSO_KEY, use_container_width=True):
-            full = f"{load_first.strip()} {load_last.strip()}".strip()
+        load_c1, load_c2 = st.columns([3, 1])
+        load_name = load_c1.text_input(
+            "Name", key="load_name", label_visibility="collapsed", placeholder="Your name"
+        )
+        if load_c2.button("Load My Profile", disabled=not _HAS_SENSO_KEY, use_container_width=True):
+            full = load_name.strip()
             if not full:
-                st.warning("Enter a first and last name.")
+                st.warning("Enter your name.")
             else:
                 try:
                     p = find_user_profile_by_name(full)
