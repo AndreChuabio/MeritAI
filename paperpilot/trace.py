@@ -7,6 +7,8 @@ memory so the Streamlit UI can render them live without round-tripping to CH.
 
 from __future__ import annotations
 
+import logging
+import os
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -14,6 +16,16 @@ from time import time
 from typing import Any, Iterator
 
 from paperpilot.clickhouse_client import insert_trace
+
+
+# clickhouse_connect prints "Unexpected Http Driver Exception" to a logger
+# before raising; silence it so half-configured local runs are not noisy.
+logging.getLogger("clickhouse_connect.driver.httpclient").setLevel(logging.CRITICAL)
+logging.getLogger("clickhouse_connect").setLevel(logging.CRITICAL)
+
+
+def _clickhouse_configured() -> bool:
+    return bool(os.environ.get("CLICKHOUSE_HOST"))
 
 
 @dataclass
@@ -37,6 +49,8 @@ def log_event(session_id: str, kind: str, payload: dict[str, Any]) -> None:
     """Record one agent step. Best-effort writes to ClickHouse; never raises."""
     evt = TraceEvent(session_id=session_id, ts=time(), kind=kind, payload=payload)
     _BUFFER.setdefault(session_id, []).append(evt)
+    if not _clickhouse_configured():
+        return
     try:
         insert_trace(session_id, kind, payload)
     except Exception as exc:  # noqa: BLE001 -- demo path; we never fail the run
