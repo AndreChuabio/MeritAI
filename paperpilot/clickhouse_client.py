@@ -91,6 +91,33 @@ SCHEMA_SQL = [
         payload String
     ) ENGINE = MergeTree() ORDER BY (session_id, ts)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS user_profile (
+        user_id String,
+        name String,
+        title String,
+        about String,
+        voice_tone String,
+        github_url String,
+        linkedin_url String,
+        scholar_url String,
+        site_url String,
+        resume_text String,
+        updated_at DateTime64(3)
+    ) ENGINE = ReplacingMergeTree(updated_at) ORDER BY user_id
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS outreach_log (
+        ts DateTime64(3) DEFAULT now64(3),
+        user_id String,
+        purpose String,
+        channel String,
+        content_type_id String,
+        sample_job_id String,
+        draft_id String,
+        posted UInt8
+    ) ENGINE = MergeTree ORDER BY (ts, user_id)
+    """,
 ]
 
 

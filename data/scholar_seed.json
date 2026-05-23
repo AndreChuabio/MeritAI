@@ -1,0 +1,23 @@
+{
+  "name": "Nikki Hu",
+  "scholar_url": "https://scholar.google.com/citations?user=DEMO",
+  "total_citations": 14,
+  "h_index": 5,
+  "by_month": [
+    {"date": "2025-08", "count": 1},
+    {"date": "2025-09", "count": 2},
+    {"date": "2025-10", "count": 3},
+    {"date": "2025-11", "count": 5},
+    {"date": "2025-12", "count": 7},
+    {"date": "2026-01", "count": 9},
+    {"date": "2026-02", "count": 11},
+    {"date": "2026-03", "count": 12},
+    {"date": "2026-04", "count": 13},
+    {"date": "2026-05", "count": 14}
+  ],
+  "papers": [
+    {"title": "Federated LLMs for Clinical Notes", "year": 2025, "citations": 7},
+    {"title": "Differential Privacy in EHR Pipelines", "year": 2025, "citations": 4},
+    {"title": "Retrieval Calibration for Medical QA", "year": 2026, "citations": 3}
+  ]
+}
