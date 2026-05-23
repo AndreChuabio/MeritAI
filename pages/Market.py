@@ -145,8 +145,9 @@ with tab_brand:
     )
 
     if st.button("Save My Profile", type="primary", disabled=not _HAS_SENSO_KEY):
-        # Senso brand-kit `guidelines` is strictly-typed; bake links + title
-        # into the description so the drafter can still see them.
+        # NOTE: Senso silently drops top-level brand_name/description/voice;
+        # every field must live INSIDE `guidelines`. Links + role baked into
+        # brand_description so the drafter still sees them.
         links_block = "\n".join(filter(None, [
             f"GitHub: {github_url}" if github_url else "",
             f"LinkedIn: {linkedin_url}" if linkedin_url else "",
@@ -161,10 +162,10 @@ with tab_brand:
         ]))
         rules: list[str] = [r.strip() for r in voice.replace("\n", ",").split(",") if r.strip()]
         payload = {
-            "brand_name": name,
-            "brand_description": description,
-            "voice_and_tone": voice,
             "guidelines": {
+                "brand_name": name,
+                "brand_description": description,
+                "voice_and_tone": voice,
                 "author_persona": title or "",
                 "global_writing_rules": rules,
             },
