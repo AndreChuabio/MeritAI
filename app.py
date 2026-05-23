@@ -75,16 +75,20 @@ def _stage_color(kind: str) -> str:
     return _STAGE_COLOR.get(kind.split(".")[0], "#94a3b8")
 
 
-def _session_totals(events) -> tuple[int, int, float]:
+def _session_totals(events) -> tuple[int, int, float, bool]:
+    """Sum tokens/cost across `.end` events. Last bool = any cost estimated."""
     t_in = t_out = 0
     cost = 0.0
+    any_estimated = False
     for e in events:
         if not e.kind.endswith(".end"):
             continue
         t_in += e.payload.get("tokens_in") or 0
         t_out += e.payload.get("tokens_out") or 0
         cost += e.payload.get("cost_usd") or 0.0
-    return t_in, t_out, cost
+        if e.payload.get("cost_source") == "estimated":
+            any_estimated = True
+    return t_in, t_out, cost, any_estimated
 
 
 # ---------------------------------------------------------------------------
@@ -95,12 +99,12 @@ left, right = st.columns([2, 1])
 
 with right:
     events = trace.buffered_events(session_id)
-    t_in, t_out, cost = _session_totals(events)
+    t_in, t_out, cost, est = _session_totals(events)
 
     # Cost/token pill -- proves the observability claim at a glance.
     pill_cols = st.columns(2)
     with pill_cols[0]:
-        st.metric("Session cost", f"${cost:.4f}")
+        st.metric("Session cost", f"${cost:.4f}" + (" (est.)" if est else ""))
     with pill_cols[1]:
         st.metric("Tokens (in / out)", f"{t_in:,} / {t_out:,}")
 

@@ -85,7 +85,17 @@ def summarize_repo(bundle: RepoBundle, session_id: str) -> ResearchSummary:
         if completion.usage:
             ctx["tokens_in"] = completion.usage.prompt_tokens
             ctx["tokens_out"] = completion.usage.completion_tokens
-            ctx["cost_usd"] = getattr(completion.usage, "cost", None)
+            gw_cost = getattr(completion.usage, "cost", None)
+            if gw_cost is not None:
+                ctx["cost_usd"] = gw_cost
+                ctx["cost_source"] = "gateway"
+            else:
+                # Lazy import: draft.py owns the price table.
+                from paperpilot.draft import _estimate_cost
+                ctx["cost_usd"] = _estimate_cost(
+                    model, ctx["tokens_in"], ctx["tokens_out"]
+                )
+                ctx["cost_source"] = "estimated"
         try:
             parsed: dict[str, Any] = json.loads(raw)
         except json.JSONDecodeError:
