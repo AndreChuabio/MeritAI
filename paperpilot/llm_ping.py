@@ -31,6 +31,7 @@ def ping(session_id: str) -> str:
         usage = completion.usage
         ctx["tokens_in"] = getattr(usage, "prompt_tokens", None)
         ctx["tokens_out"] = getattr(usage, "completion_tokens", None)
+        ctx["cost_usd"] = getattr(usage, "cost", None)
         ctx["finish_reason"] = completion.choices[0].finish_reason
         ctx["response_preview"] = text[:200]
 

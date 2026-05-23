@@ -1,0 +1,193 @@
+{
+  "session_id": "sess_b292e0d067ae",
+  "url": "https://github.com/karpathy/nanoGPT",
+  "repo": "karpathy/nanoGPT",
+  "summary": {
+    "problem": "The complexity and computational demands of training and finetuning medium-sized GPT models hinder accessibility and rapid experimentation for researchers and practitioners. Existing implementations can be overly complex or slow.",
+    "contribution": "nanoGPT provides a simplified, highly optimized, and readable PyTorch implementation of the GPT-2 architecture, enabling efficient training and finetuning of language models from scratch or using pre-trained weights. Its core consists of a ~300-line training loop (`train.py`) and a ~300-line GPT model definition (`model.py`).",
+    "method": "The work implements a standard Transformer-based GPT-2 model (`model.py`) featuring causal self-attention (with optional Flash Attention for PyTorch 2.0 efficiency) and MLP blocks. Training (`train.py`) utilizes PyTorch's Distributed Data Parallel (DDP), mixed-precision training, gradient accumulation, and a cosine learning rate scheduler with warmup. Data preparation scripts (`data/openwebtext/prepare.py`, etc.) convert text datasets like OpenWebText and Tiny Shakespeare into binary token IDs. The repository also includes tools for analyzing model scaling laws and FLOPs (`scaling_laws.ipynb`, `transformer_sizing.ipynb`).",
+    "results": "nanoGPT successfully reproduces GPT-2 (124M) on OpenWebText, achieving a validation loss of ~2.85 in approximately 4 days on an 8x A100 40GB node. Smaller character-level models on Tiny Shakespeare achieve a 1.4697 validation loss in ~3 minutes on a single A100 GPU. Performance is significantly boosted by PyTorch 2.0's `torch.compile()`, reducing iteration time from ~250ms to 135ms.",
+    "limitations": "The repository is explicitly stated as \"very old and deprecated\" (as of a Nov 2025 update), with a newer successor (`nanochat`) available. Future work includes investigating FSDP, evaluating zero-shot perplexities on standard benchmarks (e.g., LAMBADA, HELM), refining finetuning hyperparameters, and incorporating advanced embeddings (rotary, alibi).",
+    "keywords": [
+      "GPT",
+      "Large Language Models",
+      "Transformer",
+      "PyTorch",
+      "Deep Learning",
+      "Training",
+      "Finetuning",
+      "Reproducibility",
+      "Efficiency"
+    ],
+    "venue_hints": [
+      "NeurIPS Systems",
+      "ICLR Systems",
+      "MLSys",
+      "EMNLP (for practical applications/systems track)"
+    ]
+  },
+  "venues": [
+    {
+      "id": "emnlp2026-main",
+      "name": "EMNLP 2026",
+      "scope": "Empirical methods in NLP: language modeling, retrieval, structured prediction, generation, evaluation, interpretability, multilingual NLP.",
+      "deadline": "2026-06-15",
+      "url": "https://2026.emnlp.org",
+      "fit_score": 0.4540100147059668,
+      "days_until_deadline": 23
+    },
+    {
+      "id": "neurips2026-ws-eval",
+      "name": "NeurIPS 2026 Workshop on Evaluation of Foundation Models",
+      "scope": "How we evaluate foundation models in practice: benchmarks, leakage, calibration, human-in-the-loop, scaling laws of evaluation.",
+      "deadline": "2026-09-12",
+      "url": "https://neurips.cc/Conferences/2026/Workshops",
+      "fit_score": 0.35903360192075473,
+      "days_until_deadline": 112
+    },
+    {
+      "id": "pydata-nyc-2026",
+      "name": "PyData NYC 2026",
+      "scope": "Data science and engineering with Python. Practitioner-track talks; informal write-ups.",
+      "deadline": "2026-08-15",
+      "url": "https://pydata.org/nyc2026/",
+      "fit_score": 0.357414767457859,
+      "days_until_deadline": 84
+    },
+    {
+      "id": "neurips2026-ws-obs",
+      "name": "NeurIPS 2026 Workshop on Observability for AI",
+      "scope": "Observability tooling for AI agents and LLM applications: tracing, evaluation in prod, drift detection, cost attribution, healthcare-grade audit logs.",
+      "deadline": "2026-09-22",
+      "url": "https://neurips.cc/Conferences/2026/Workshops",
+      "fit_score": 0.32718758967160017,
+      "days_until_deadline": 122
+    },
+    {
+      "id": "npj-digit-med-2026",
+      "name": "npj Digital Medicine",
+      "scope": "Nature Partner Journal on digital medicine: clinical AI, wearable health, telemedicine, deployment evidence.",
+      "deadline": "2026-12-31",
+      "url": "https://www.nature.com/npjdigitalmed/",
+      "fit_score": 0.2531693941829449,
+      "days_until_deadline": 222
+    }
+  ],
+  "chosen": {
+    "id": "emnlp2026-main",
+    "name": "EMNLP 2026",
+    "scope": "Empirical methods in NLP: language modeling, retrieval, structured prediction, generation, evaluation, interpretability, multilingual NLP.",
+    "deadline": "2026-06-15",
+    "url": "https://2026.emnlp.org",
+    "fit_score": 0.4540100147059668,
+    "days_until_deadline": 23
+  },
+  "sections": {
+    "abstract": {
+      "text": "We present nanoGPT, a minimal yet highly optimized PyTorch implementation of the GPT-2 architecture designed to lower the barrier to entry for language model research and rapid experimentation. Existing open-source implementations frequently sacrifice readability for performance or vice versa, impeding reproducibility and accessibility for practitioners working outside large-scale compute environments. nanoGPT addresses this tension through a compact codebase\u2014approximately 300 lines each for model definition and training loop\u2014while incorporating modern efficiency techniques including Flash Attention, Distributed Data Parallel training, mixed-precision arithmetic, gradient accumulation, and cosine learning rate scheduling with warmup. We demonstrate that this implementation faithfully reproduces GPT-2 (124M parameters) on OpenWebText, achieving a validation loss of 2.85 in approximately four days on eight A100 GPUs. Integration with PyTorch 2.0's compilation framework reduces per-iteration wall-clock time from 250ms to 135ms, yielding substantial throughput improvements without architectural modification. Character-level models trained on Tiny Shakespeare converge to a validation loss of 1.47 in under three minutes on a single GPU. By prioritizing transparency, empirical reproducibility, and practical efficiency, nanoGPT serves as a tractable foundation for investigating scaling behavior, finetuning dynamics, and architectural modifications in controlled experimental settings.",
+      "citations": [],
+      "stripped_ids": []
+    },
+    "intro": {
+      "text": "## Introduction\n\nThe rapid proliferation of large language models has fundamentally reshaped the landscape of natural language processing, yet the practical infrastructure required to train and finetune such models remains a persistent barrier to entry. Even models of moderate scale\u2014on the order of hundreds of millions of parameters\u2014impose substantial computational and engineering demands that can impede iterative experimentation, reproducibility studies, and pedagogical use. As the field increasingly relies on empirical validation of architectural choices, training dynamics, and scaling behavior, the absence of clean, auditable, and efficient reference implementations creates a reproducibility gap that is difficult to bridge through paper descriptions alone. This tension between the centrality of language model training to modern NLP research and the opacity of its practical execution motivates a renewed focus on accessible, well-engineered tooling.\n\nPrior efforts to democratize language model training have generally fallen into one of two failure modes. On one end, production-grade frameworks prioritize scalability and feature completeness at the cost of readability, burying core logic beneath layers of abstraction that obscure the relationship between algorithmic choices and empirical outcomes. On the other end, educational implementations sacrifice performance to the point of impracticality, making it difficult to conduct experiments at meaningful scale. Neither regime adequately serves the researcher who needs to rapidly prototype a modification to the training objective, verify a scaling hypothesis, or finetune a pretrained checkpoint on a domain-specific corpus\u2014all while maintaining confidence that the implementation faithfully reflects the intended procedure.\n\nIn this work, we present nanoGPT, a compact and highly optimized PyTorch implementation of the GPT-2 architecture designed to close this gap. The entire system is expressed in approximately 600 lines of core code spanning a model definition and a training loop, yet achieves competitive empirical results: reproducing GPT-2 (124M) on OpenWebText at a validation loss of approximately 2.85, and demonstrating substantial throughput gains through integration with PyTorch 2.0 compilation. We further provide utilities for dataset preparation, scaling law analysis, and finetuning from pretrained weights, offering a self-contained platform for empirical investigation of language model behavior across scales and domains.",
+      "citations": [],
+      "stripped_ids": []
+    },
+    "related": {
+      "text": "## Related Work\n\n**Language Model Architectures and Pretraining.** nanoGPT builds directly on the GPT-2 Transformer architecture, which has become a standard testbed for studying autoregressive language modeling at scale. The broader ecosystem of instruction-tuned derivatives demonstrates the continued relevance of accessible GPT-style foundations: WizardLM [arxiv:2304.12244] shows how open-domain instruction-following data can be generated at scale to finetune pretrained models effectively, while instruction tuning with GPT-4-generated data [arxiv:2304.03277] underscores that high-quality supervision signals dramatically improve zero-shot generalization. These lines of work presuppose efficient, reproducible base model implementations of the kind nanoGPT provides.\n\n**Efficient and Lightweight Model Training.** A recurring theme in the NLP community is reducing the computational burden of training and adapting large models without sacrificing downstream quality. Lightweight Transformer architectures for clinical NLP [arxiv:2302.04725] illustrate that carefully engineered, smaller models can match or exceed much larger counterparts on specialized tasks\u2014a philosophy closely aligned with nanoGPT's emphasis on simplicity and speed. Similarly, LIMIT [arxiv:2311.13133] demonstrates that instruction tuning on smaller, curated datasets can match performance achieved with far larger corpora, reinforcing the value of lean training pipelines that nanoGPT facilitates.\n\n**Domain-Specific Finetuning and Benchmarking.** Accessible training infrastructure is a prerequisite for rapid domain adaptation. FinGPT [arxiv:2310.04793] exemplifies how open-source GPT implementations enable financial NLP practitioners to finetune models on specialized corpora with limited resources\u2014a use case that benefits directly from readable, modifiable codebases. Evaluation frameworks such as the PPTC benchmark [arxiv:2311.01767] further highlight the growing need for reproducible model checkpoints that can be quickly adapted and assessed across diverse task settings, motivating the kind of transparent, forkable implementation nanoGPT offers.\n\nTogether, these threads\u2014scalable pretraining, efficient finetuning, and rigorous evaluation\u2014situate nanoGPT as a practical foundation for empirical NLP research that prioritizes accessibility alongside competitive performance.",
+      "citations": [
+        {
+          "id": "2304.12244",
+          "title": "WizardLM: Empowering large pre-trained language models to follow complex instructions",
+          "authors": [
+            "Can Xu",
+            "Qingfeng Sun",
+            "Kai Zheng",
+            "Xiubo Geng",
+            "Pu Zhao",
+            "Jiazhan Feng",
+            "Chongyang Tao",
+            "Qingwei Lin",
+            "Daxin Jiang"
+          ],
+          "year": 2023,
+          "abstract": "Training large language models (LLMs) with open-domain instruction following data brings colossal success. However, manually creating such instruction data is very time-consuming and labor-intensive. Moreover, humans may struggle to produce high-complexity instructions. In this paper, we show an avenue for creating large amounts of instruction data with varying levels of complexity using LLM instead of humans. Starting with an initial set of instructions, we use our proposed Evol-Instruct to rewrite them step by step into more complex instructions. Then, we mix all generated instruction data to fine-tune LLaMA. We call the resulting model WizardLM. Human evaluations on a complexity-balanced test bed and Vicuna's testset show that instructions from Evol-Instruct are superior to human-created ones. By analyzing the human evaluation results of the high complexity part, we demonstrate that outputs from our WizardLM are preferred to outputs from OpenAI ChatGPT. In GPT-4 automatic evaluation, WizardLM achieves more than 90\\% capacity of ChatGPT on 17 out of 29 skills. Even though WizardLM still lags behind ChatGPT in some aspects, our findings suggest that fine-tuning with AI-evolved instructions is a promising direction for enhancing LLMs. Our code and data are public at https://github.com/nlpxucan/WizardLM"
+        },
+        {
+          "id": "2302.04725",
+          "title": "Lightweight Transformers for Clinical Natural Language Processing",
+          "authors": [
+            "Omid Rohanian",
+            "Mohammadmahdi Nouriborji",
+            "Hannah Jauncey",
+            "Samaneh Kouchaki",
+            "ISARIC Clinical Characterisation Group",
+            "Lei Clifton",
+            "Laura Merson",
+            "David A. Clifton"
+          ],
+          "year": 2023,
+          "abstract": "Specialised pre-trained language models are becoming more frequent in NLP since they can potentially outperform models trained on generic texts. BioBERT and BioClinicalBERT are two examples of such models that have shown promise in medical NLP tasks. Many of these models are overparametrised and resource-intensive, but thanks to techniques like Knowledge Distillation (KD), it is possible to create smaller versions that perform almost as well as their larger counterparts. In this work, we specifically focus on development of compact language models for processing clinical texts (i.e. progress notes, discharge summaries etc). We developed a number of efficient lightweight clinical transformers using knowledge distillation and continual learning, with the number of parameters ranging from 15 million to 65 million. These models performed comparably to larger models such as BioBERT and ClinicalBioBERT and significantly outperformed other compact models trained on general or biomedical data. Our extensive evaluation was done across several standard datasets and covered a wide range of clinical text-mining tasks, including Natural Language Inference, Relation Extraction, Named Entity Recognition, and Sequence Classification. To our knowledge, this is the first comprehensive study specifically focused on creating efficient and compact transformers for clinical NLP tasks. The models and code used in this study can be found on our Huggingface profile at https://huggingface.co/nlpie and Github page at https://github.com/nlpie-research/Lightweight-Clinical-Transformers, respectively, promoting reproducibility of our results."
+        },
+        {
+          "id": "2304.03277",
+          "title": "Instruction Tuning with GPT-4",
+          "authors": [
+            "Baolin Peng",
+            "Chunyuan Li",
+            "Pengcheng He",
+            "Michel Galley",
+            "Jianfeng Gao"
+          ],
+          "year": 2023,
+          "abstract": "Prior work has shown that finetuning large language models (LLMs) using machine-generated instruction-following data enables such models to achieve remarkable zero-shot capabilities on new tasks, and no human-written instructions are needed. In this paper, we present the first attempt to use GPT-4 to generate instruction-following data for LLM finetuning. Our early experiments on instruction-tuned LLaMA models show that the 52K English and Chinese instruction-following data generated by GPT-4 leads to superior zero-shot performance on new tasks to the instruction-following data generated by previous state-of-the-art models. We also collect feedback and comparison data from GPT-4 to enable a comprehensive evaluation and reward model training. We make our data generated using GPT-4 as well as our codebase publicly available."
+        },
+        {
+          "id": "2311.13133",
+          "title": "LIMIT: Less Is More for Instruction Tuning Across Evaluation Paradigms",
+          "authors": [
+            "Aditi Jha",
+            "Sam Havens",
+            "Jeremy Dohmann",
+            "Alex Trott",
+            "Jacob Portes"
+          ],
+          "year": 2023,
+          "abstract": "Large Language Models are traditionally finetuned on large instruction datasets. However recent studies suggest that small, high-quality datasets can suffice for general purpose instruction following. This lack of consensus surrounding finetuning best practices is in part due to rapidly diverging approaches to LLM evaluation. In this study, we ask whether a small amount of diverse finetuning samples can improve performance on both traditional perplexity-based NLP benchmarks, and on open-ended, model-based evaluation. We finetune open-source MPT-7B and MPT-30B models on instruction finetuning datasets of various sizes ranging from 1k to 60k samples. We find that subsets of 1k-6k instruction finetuning samples are sufficient to achieve good performance on both (1) traditional NLP benchmarks and (2) model-based evaluation. Finally, we show that mixing textbook-style and open-ended QA finetuning datasets optimizes performance on both evaluation paradigms."
+        },
+        {
+          "id": "2310.04793",
+          "title": "FinGPT: Instruction Tuning Benchmark for Open-Source Large Language Models in Financial Datasets",
+          "authors": [
+            "Neng Wang",
+            "Hongyang Yang",
+            "Christina Dan Wang"
+          ],
+          "year": 2023,
+          "abstract": "In the swiftly expanding domain of Natural Language Processing (NLP), the potential of GPT-based models for the financial sector is increasingly evident. However, the integration of these models with financial datasets presents challenges, notably in determining their adeptness and relevance. This paper introduces a distinctive approach anchored in the Instruction Tuning paradigm for open-source large language models, specifically adapted for financial contexts. Through this methodology, we capitalize on the interoperability of open-source models, ensuring a seamless and transparent integration. We begin by explaining the Instruction Tuning paradigm, highlighting its effectiveness for immediate integration. The paper presents a benchmarking scheme designed for end-to-end training and testing, employing a cost-effective progression. Firstly, we assess basic competencies and fundamental tasks, such as Named Entity Recognition (NER) and sentiment analysis to enhance specialization. Next, we delve into a comprehensive model, executing multi-task operations by amalgamating all instructional tunings to examine versatility. Finally, we explore the zero-shot capabilities by earmarking unseen tasks and incorporating novel datasets to understand adaptability in uncharted terrains. Such a paradigm fortifies the principles of openness and reproducibility, laying a robust foundation for future investigations in open-source financial large language models (FinLLMs)."
+        },
+        {
+          "id": "2311.01767",
+          "title": "PPTC Benchmark: Evaluating Large Language Models for PowerPoint Task Completion",
+          "authors": [
+            "Yiduo Guo",
+            "Zekai Zhang",
+            "Yaobo Liang",
+            "Dongyan Zhao",
+            "Nan Duan"
+          ],
+          "year": 2023,
+          "abstract": "Recent evaluations of Large Language Models (LLMs) have centered around testing their zero-shot/few-shot capabilities for basic natural language tasks and their ability to translate instructions into tool APIs. However, the evaluation of LLMs utilizing complex tools to finish multi-turn, multi-modal instructions in a complex multi-modal environment has not been investigated. To address this gap, we introduce the PowerPoint Task Completion (PPTC) benchmark to assess LLMs' ability to create and edit PPT files based on user instructions. It contains 279 multi-turn sessions covering diverse topics and hundreds of instructions involving multi-modal operations. We also propose the PPTX-Match Evaluation System that evaluates if LLMs finish the instruction based on the prediction file rather than the label API sequence, thus it supports various LLM-generated API sequences. We measure 3 closed LLMs and 6 open-source LLMs. The results show that GPT-4 outperforms other LLMs with 75.1\\% accuracy in single-turn dialogue testing but faces challenges in completing entire sessions, achieving just 6\\% session accuracy. We find three main error causes in our benchmark: error accumulation in the multi-turn session, long PPT template processing, and multi-modality perception. These pose great challenges for future LLM and agent systems. We release the data, code, and evaluation system of PPTC at \\url{https://github.com/gydpku/PPTC}."
+        }
+      ],
+      "stripped_ids": []
+    },
+    "method": {
+      "text": "## 3 Method\n\nWe implement a streamlined yet fully capable GPT-2 architecture in PyTorch, designed to balance readability with computational efficiency. The model follows the standard decoder-only Transformer formulation, comprising stacked blocks of causal multi-head self-attention and position-wise feed-forward (MLP) layers, with layer normalization applied prior to each sub-component. To support efficient training at scale, we incorporate several complementary techniques: distributed data-parallel training across multiple GPUs, mixed-precision computation via automatic casting to BFloat16, and gradient accumulation to simulate large effective batch sizes under memory constraints. The learning rate follows a cosine annealing schedule with a linear warmup phase, a widely adopted strategy for stabilizing early optimization and promoting convergence in large-scale language model training. Input text corpora are preprocessed offline into memory-mapped binary files of integer token IDs, enabling low-overhead data loading during training. Where available, we leverage PyTorch 2.0's graph compilation and Flash Attention to reduce per-iteration wall-clock time without altering model behavior. This design deliberately minimizes abstraction layers, keeping the full training loop and model definition each within approximately 300 lines of code, so that every modeling and optimization decision remains transparent and empirically auditable.",
+      "citations": [],
+      "stripped_ids": []
+    }
+  },
+  "tex": "\\documentclass[11pt]{article}\n\\usepackage[utf8]{inputenc}\n\\usepackage[margin=1in]{geometry}\n\\usepackage{authblk}\n\\usepackage{cite}\n\n\\title{nanoGPT provides a simplified, highly optimized, and readable PyTorch implementation of the GPT-2 architecture, enabling efficient training and finetuning of language models from scratch or using pre-trained weights}\n\\author{PaperPilot}\n\\date{Drafted by PaperPilot for \\emph{EMNLP 2026} on 2026-05-23}\n\n\\begin{document}\n\\maketitle\n\n\\begin{abstract}\nWe present nanoGPT, a minimal yet highly optimized PyTorch implementation of the GPT-2 architecture designed to lower the barrier to entry for language model research and rapid experimentation. Existing open-source implementations frequently sacrifice readability for performance or vice versa, impeding reproducibility and accessibility for practitioners working outside large-scale compute environments. nanoGPT addresses this tension through a compact codebase\u2014approximately 300 lines each for model definition and training loop\u2014while incorporating modern efficiency techniques including Flash Attention, Distributed Data Parallel training, mixed-precision arithmetic, gradient accumulation, and cosine learning rate scheduling with warmup. We demonstrate that this implementation faithfully reproduces GPT-2 (124M parameters) on OpenWebText, achieving a validation loss of 2.85 in approximately four days on eight A100 GPUs. Integration with PyTorch 2.0's compilation framework reduces per-iteration wall-clock time from 250ms to 135ms, yielding substantial throughput improvements without architectural modification. Character-level models trained on Tiny Shakespeare converge to a validation loss of 1.47 in under three minutes on a single GPU. By prioritizing transparency, empirical reproducibility, and practical efficiency, nanoGPT serves as a tractable foundation for investigating scaling behavior, finetuning dynamics, and architectural modifications in controlled experimental settings.\n\\end{abstract}\n\n\\section{Introduction}\n## Introduction\n\nThe rapid proliferation of large language models has fundamentally reshaped the landscape of natural language processing, yet the practical infrastructure required to train and finetune such models remains a persistent barrier to entry. Even models of moderate scale\u2014on the order of hundreds of millions of parameters\u2014impose substantial computational and engineering demands that can impede iterative experimentation, reproducibility studies, and pedagogical use. As the field increasingly relies on empirical validation of architectural choices, training dynamics, and scaling behavior, the absence of clean, auditable, and efficient reference implementations creates a reproducibility gap that is difficult to bridge through paper descriptions alone. This tension between the centrality of language model training to modern NLP research and the opacity of its practical execution motivates a renewed focus on accessible, well-engineered tooling.\n\nPrior efforts to democratize language model training have generally fallen into one of two failure modes. On one end, production-grade frameworks prioritize scalability and feature completeness at the cost of readability, burying core logic beneath layers of abstraction that obscure the relationship between algorithmic choices and empirical outcomes. On the other end, educational implementations sacrifice performance to the point of impracticality, making it difficult to conduct experiments at meaningful scale. Neither regime adequately serves the researcher who needs to rapidly prototype a modification to the training objective, verify a scaling hypothesis, or finetune a pretrained checkpoint on a domain-specific corpus\u2014all while maintaining confidence that the implementation faithfully reflects the intended procedure.\n\nIn this work, we present nanoGPT, a compact and highly optimized PyTorch implementation of the GPT-2 architecture designed to close this gap. The entire system is expressed in approximately 600 lines of core code spanning a model definition and a training loop, yet achieves competitive empirical results: reproducing GPT-2 (124M) on OpenWebText at a validation loss of approximately 2.85, and demonstrating substantial throughput gains through integration with PyTorch 2.0 compilation. We further provide utilities for dataset preparation, scaling law analysis, and finetuning from pretrained weights, offering a self-contained platform for empirical investigation of language model behavior across scales and domains.\n\n\\section{Related Work}\n## Related Work\n\n**Language Model Architectures and Pretraining.** nanoGPT builds directly on the GPT-2 Transformer architecture, which has become a standard testbed for studying autoregressive language modeling at scale. The broader ecosystem of instruction-tuned derivatives demonstrates the continued relevance of accessible GPT-style foundations: WizardLM \\cite{arxiv_2304_12244} shows how open-domain instruction-following data can be generated at scale to finetune pretrained models effectively, while instruction tuning with GPT-4-generated data \\cite{arxiv_2304_03277} underscores that high-quality supervision signals dramatically improve zero-shot generalization. These lines of work presuppose efficient, reproducible base model implementations of the kind nanoGPT provides.\n\n**Efficient and Lightweight Model Training.** A recurring theme in the NLP community is reducing the computational burden of training and adapting large models without sacrificing downstream quality. Lightweight Transformer architectures for clinical NLP \\cite{arxiv_2302_04725} illustrate that carefully engineered, smaller models can match or exceed much larger counterparts on specialized tasks\u2014a philosophy closely aligned with nanoGPT's emphasis on simplicity and speed. Similarly, LIMIT \\cite{arxiv_2311_13133} demonstrates that instruction tuning on smaller, curated datasets can match performance achieved with far larger corpora, reinforcing the value of lean training pipelines that nanoGPT facilitates.\n\n**Domain-Specific Finetuning and Benchmarking.** Accessible training infrastructure is a prerequisite for rapid domain adaptation. FinGPT \\cite{arxiv_2310_04793} exemplifies how open-source GPT implementations enable financial NLP practitioners to finetune models on specialized corpora with limited resources\u2014a use case that benefits directly from readable, modifiable codebases. Evaluation frameworks such as the PPTC benchmark \\cite{arxiv_2311_01767} further highlight the growing need for reproducible model checkpoints that can be quickly adapted and assessed across diverse task settings, motivating the kind of transparent, forkable implementation nanoGPT offers.\n\nTogether, these threads\u2014scalable pretraining, efficient finetuning, and rigorous evaluation\u2014situate nanoGPT as a practical foundation for empirical NLP research that prioritizes accessibility alongside competitive performance.\n\n\\section{Method}\n## 3 Method\n\nWe implement a streamlined yet fully capable GPT-2 architecture in PyTorch, designed to balance readability with computational efficiency. The model follows the standard decoder-only Transformer formulation, comprising stacked blocks of causal multi-head self-attention and position-wise feed-forward (MLP) layers, with layer normalization applied prior to each sub-component. To support efficient training at scale, we incorporate several complementary techniques: distributed data-parallel training across multiple GPUs, mixed-precision computation via automatic casting to BFloat16, and gradient accumulation to simulate large effective batch sizes under memory constraints. The learning rate follows a cosine annealing schedule with a linear warmup phase, a widely adopted strategy for stabilizing early optimization and promoting convergence in large-scale language model training. Input text corpora are preprocessed offline into memory-mapped binary files of integer token IDs, enabling low-overhead data loading during training. Where available, we leverage PyTorch 2.0's graph compilation and Flash Attention to reduce per-iteration wall-clock time without altering model behavior. This design deliberately minimizes abstraction layers, keeping the full training loop and model definition each within approximately 300 lines of code, so that every modeling and optimization decision remains transparent and empirically auditable.\n\n\\section{Results}\n\\emph{Results section drafted from the repository's reported numbers and qualitative findings:}\n\nnanoGPT successfully reproduces GPT-2 (124M) on OpenWebText, achieving a validation loss of ~2.85 in approximately 4 days on an 8x A100 40GB node. Smaller character-level models on Tiny Shakespeare achieve a 1.4697 validation loss in ~3 minutes on a single A100 GPU. Performance is significantly boosted by PyTorch 2.0's `torch.compile()`, reducing iteration time from ~250ms to 135ms.\n\n\\section{Discussion and Limitations}\n\\emph{Limitations the repository acknowledges or that follow from the method:}\n\nThe repository is explicitly stated as \"very old and deprecated\" (as of a Nov 2025 update), with a newer successor (`nanochat`) available. Future work includes investigating FSDP, evaluating zero-shot perplexities on standard benchmarks (e.g., LAMBADA, HELM), refining finetuning hyperparameters, and incorporating advanced embeddings (rotary, alibi).\n\n\\bibliographystyle{plain}\n\\bibliography{references}\n\n\\end{document}",
+  "bib": "@article{xu2023_2304_12244,\n  title={ WizardLM: Empowering large pre-trained language models to follow complex instructions },\n  author={ Can Xu and Qingfeng Sun and Kai Zheng and Xiubo Geng and Pu Zhao and Jiazhan Feng and Chongyang Tao and Qingwei Lin and Daxin Jiang },\n  year={ 2023 },\n  journal={ arXiv:2304.12244 }\n}\n\n@article{rohanian2023_2302_04725,\n  title={ Lightweight Transformers for Clinical Natural Language Processing },\n  author={ Omid Rohanian and Mohammadmahdi Nouriborji and Hannah Jauncey and Samaneh Kouchaki and ISARIC Clinical Characterisation Group and Lei Clifton and Laura Merson and David A. Clifton },\n  year={ 2023 },\n  journal={ arXiv:2302.04725 }\n}\n\n@article{peng2023_2304_03277,\n  title={ Instruction Tuning with GPT-4 },\n  author={ Baolin Peng and Chunyuan Li and Pengcheng He and Michel Galley and Jianfeng Gao },\n  year={ 2023 },\n  journal={ arXiv:2304.03277 }\n}\n\n@article{jha2023_2311_13133,\n  title={ LIMIT: Less Is More for Instruction Tuning Across Evaluation Paradigms },\n  author={ Aditi Jha and Sam Havens and Jeremy Dohmann and Alex Trott and Jacob Portes },\n  year={ 2023 },\n  journal={ arXiv:2311.13133 }\n}\n\n@article{wang2023_2310_04793,\n  title={ FinGPT: Instruction Tuning Benchmark for Open-Source Large Language Models in Financial Datasets },\n  author={ Neng Wang and Hongyang Yang and Christina Dan Wang },\n  year={ 2023 },\n  journal={ arXiv:2310.04793 }\n}\n\n@article{guo2023_2311_01767,\n  title={ PPTC Benchmark: Evaluating Large Language Models for PowerPoint Task Completion },\n  author={ Yiduo Guo and Zekai Zhang and Yaobo Liang and Dongyan Zhao and Nan Duan },\n  year={ 2023 },\n  journal={ arXiv:2311.01767 }\n}\n"
+}

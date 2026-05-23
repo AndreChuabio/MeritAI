@@ -85,6 +85,7 @@ def summarize_repo(bundle: RepoBundle, session_id: str) -> ResearchSummary:
         if completion.usage:
             ctx["tokens_in"] = completion.usage.prompt_tokens
             ctx["tokens_out"] = completion.usage.completion_tokens
+            ctx["cost_usd"] = getattr(completion.usage, "cost", None)
         try:
             parsed: dict[str, Any] = json.loads(raw)
         except json.JSONDecodeError:

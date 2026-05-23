@@ -30,8 +30,8 @@ load_dotenv()
 st.set_page_config(page_title="PaperPilot", page_icon="📄", layout="wide")
 st.title("PaperPilot")
 st.caption(
-    "Drop a GitHub repo. Get a paper drafted for a real venue. "
-    "Every LLM call traced in Lapdog."
+    "GitHub repo → Gemini summary → ClickHouse venue match → Claude paper draft. "
+    "Traced end-to-end by Datadog Lapdog."
 )
 
 if "session_id" not in st.session_state:
@@ -51,12 +51,40 @@ session_id = st.session_state.session_id
 
 
 def _env_summary() -> dict[str, str]:
+    gw = "configured" if os.environ.get("AI_GATEWAY_API_KEY") else "missing"
     return {
-        "Gateway": "configured" if os.environ.get("AI_GATEWAY_API_KEY") else "missing",
-        "ClickHouse": "configured" if os.environ.get("CLICKHOUSE_HOST") else "missing",
-        "Datadog forward": "enabled" if os.environ.get("DD_API_KEY") else "off",
-        "Demo mode": "on" if os.environ.get("DEMO_MODE", "").lower() == "true" else "off",
+        "Vercel AI Gateway": gw,
+        "DeepMind / Gemini 1M": gw,
+        "ClickHouse Cloud": "configured" if os.environ.get("CLICKHOUSE_HOST") else "missing",
+        "Datadog Lapdog forward": "enabled" if os.environ.get("DD_API_KEY") else "off",
+        "Nimble web data": "cached",
     }
+
+
+_STAGE_COLOR = {
+    "ingest": "#3b82f6",   # blue
+    "match": "#10b981",    # green
+    "citation": "#f59e0b", # amber
+    "draft": "#8b5cf6",    # purple
+    "llm": "#94a3b8",      # slate (hello-world ping)
+    "demo": "#ec4899",     # pink
+}
+
+
+def _stage_color(kind: str) -> str:
+    return _STAGE_COLOR.get(kind.split(".")[0], "#94a3b8")
+
+
+def _session_totals(events) -> tuple[int, int, float]:
+    t_in = t_out = 0
+    cost = 0.0
+    for e in events:
+        if not e.kind.endswith(".end"):
+            continue
+        t_in += e.payload.get("tokens_in") or 0
+        t_out += e.payload.get("tokens_out") or 0
+        cost += e.payload.get("cost_usd") or 0.0
+    return t_in, t_out, cost
 
 
 # ---------------------------------------------------------------------------
@@ -66,23 +94,39 @@ def _env_summary() -> dict[str, str]:
 left, right = st.columns([2, 1])
 
 with right:
+    events = trace.buffered_events(session_id)
+    t_in, t_out, cost = _session_totals(events)
+
+    # Cost/token pill -- proves the observability claim at a glance.
+    pill_cols = st.columns(2)
+    with pill_cols[0]:
+        st.metric("Session cost", f"${cost:.4f}")
+    with pill_cols[1]:
+        st.metric("Tokens (in / out)", f"{t_in:,} / {t_out:,}")
+
     st.subheader("Agent trace")
     st.caption(f"session: `{session_id}`")
-    events = trace.buffered_events(session_id)
     if not events:
         st.info("No events yet. Run a stage on the left.")
     else:
         for evt in reversed(events[-30:]):
-            with st.container(border=True):
-                st.markdown(f"**{evt.kind}**")
-                st.caption(f"+{evt.ts:.0f}")
-                if evt.payload:
+            color = _stage_color(evt.kind)
+            st.markdown(
+                f'<div style="border-left:4px solid {color};padding:6px 10px;'
+                f'margin-bottom:6px;background:rgba(120,120,120,0.05);">'
+                f'<div style="font-weight:600">{evt.kind}</div>'
+                f'<div style="font-size:11px;opacity:0.6">+{evt.ts:.0f}</div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            if evt.payload:
+                with st.expander("payload", expanded=False):
                     st.json(evt.payload, expanded=False)
 
     st.divider()
     st.markdown("**Sponsor wires**")
     for label, status in _env_summary().items():
-        icon = "🟢" if status in {"configured", "enabled", "on"} else "⚪"
+        icon = "🟢" if status in {"configured", "enabled", "on", "cached"} else "⚪"
         st.write(f"{icon} {label}: `{status}`")
     st.caption("Lapdog dashboard: https://lapdog.datadoghq.com (reads from local :8126)")
 
@@ -113,8 +157,22 @@ with left:
     # Full pipeline
     # ------------------------------------------------------------------
     with tab_pipeline:
+        # Quick-pick chips -- zero typing on the projector.
+        chip_cols = st.columns(4)
+        _CHIPS = [
+            ("nanoGPT", "https://github.com/karpathy/nanoGPT"),
+            ("transformers", "https://github.com/huggingface/transformers"),
+            ("llama.cpp", "https://github.com/ggerganov/llama.cpp"),
+            ("PaperPilot", "https://github.com/AndreChuabio/agentichack"),
+        ]
+        for col, (label, chip_url) in zip(chip_cols, _CHIPS):
+            with col:
+                if st.button(label, key=f"chip_{label}", use_container_width=True):
+                    st.session_state.url_prefill = chip_url
+
         url = st.text_input(
             "GitHub repo URL",
+            value=st.session_state.get("url_prefill", ""),
             placeholder="https://github.com/owner/repo",
             help="Public or private repo you have access to via gh CLI.",
         )
@@ -155,10 +213,27 @@ with left:
                 st.session_state.chosen_venue = (
                     st.session_state.venues[0] if st.session_state.venues else None
                 )
+                # Rehydrate drafted sections so we don't trigger a live draft.
+                from paperpilot.arxiv_lookup import PaperMeta
+                from paperpilot.draft import DraftSection
+
+                st.session_state.sections = {
+                    name: DraftSection(
+                        name=name,
+                        text=sec["text"],
+                        citations=[PaperMeta(**c) for c in sec.get("citations", [])],
+                        stripped_ids=sec.get("stripped_ids", []),
+                    )
+                    for name, sec in cache.get("sections", {}).items()
+                }
                 trace.log_event(
                     session_id,
                     "demo.cache_loaded",
-                    {"url": cache["url"], "venues": len(cache["venues"])},
+                    {
+                        "url": cache["url"],
+                        "venues": len(cache["venues"]),
+                        "sections": list(st.session_state.sections.keys()),
+                    },
                 )
 
         if ingest_clicked and url:
@@ -186,7 +261,7 @@ with left:
         # Render the structured summary
         if st.session_state.summary is not None:
             s = st.session_state.summary
-            with st.expander("Research summary (Gemini 1M-ctx)", expanded=True):
+            with st.expander("Research summary (Gemini 1M-ctx)", expanded=False):
                 st.markdown(f"**Problem.** {s.problem}")
                 st.markdown(f"**Contribution.** {s.contribution}")
                 st.markdown(f"**Method.** {s.method}")

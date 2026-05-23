@@ -170,17 +170,26 @@ def draft_section(
                 user_message,
             ],
             stream=True,
+            stream_options={"include_usage": True},
             max_tokens=900,
             temperature=0.5,
         )
         chunks: list[str] = []
+        final_usage = None
         for event in stream:
+            if getattr(event, "usage", None):
+                # Gateway emits usage in the FINAL chunk (choices=[]).
+                final_usage = event.usage
             delta = event.choices[0].delta.content if event.choices else None
             if delta:
                 chunks.append(delta)
                 yield delta
         full_text = "".join(chunks)
         ctx["chars"] = len(full_text)
+        if final_usage:
+            ctx["tokens_in"] = final_usage.prompt_tokens
+            ctx["tokens_out"] = final_usage.completion_tokens
+            ctx["cost_usd"] = getattr(final_usage, "cost", None)
 
     citations: list[PaperMeta] = []
     stripped: list[str] = []
