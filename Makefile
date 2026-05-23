@@ -24,6 +24,12 @@ fetch-arxiv:
 ping:
 	uv run python -c "from dotenv import load_dotenv; load_dotenv(); from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session()))"
 
+# Ping with Datadog cloud forward via ddtrace-run. Sends one LLM trace to
+# Datadog LLM Observability -- this is what the DD signup wizard waits for.
+# Requires DD_API_KEY, DD_SITE, DD_LLMOBS_ENABLED=1, DD_LLMOBS_ML_APP in .env.
+ping-cloud:
+	uv run ddtrace-run python -c "from dotenv import load_dotenv; load_dotenv(); from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session()))"
+
 # Pre-compute the demo repo's pipeline output for DEMO_MODE fallback.
 # Usage: make precompute URL=https://github.com/owner/repo
 precompute:

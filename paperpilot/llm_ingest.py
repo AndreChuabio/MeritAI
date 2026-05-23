@@ -64,14 +64,20 @@ def summarize_repo(bundle: RepoBundle, session_id: str) -> ResearchSummary:
         model=model,
     ) as ctx:
         client = get_client()
+        # Note: Gemini through the Vercel AI Gateway rejects the OpenAI-style
+        # response_format=json_object. The system prompt + defensive regex
+        # extraction below handle JSON extraction without that hint.
+        #
+        # Gemini 2.5 Flash is a reasoning model -- it spends most of its
+        # output budget on internal reasoning tokens. Allow generous headroom
+        # so the ~1500-token JSON we want isn't cut off mid-string.
         completion = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": rendered},
             ],
-            response_format={"type": "json_object"},
-            max_tokens=2000,
+            max_tokens=8000,
             temperature=0.2,
         )
         raw = completion.choices[0].message.content or "{}"
