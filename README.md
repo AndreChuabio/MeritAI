@@ -12,7 +12,7 @@ PaperPilot turns a GitHub repository into a venue-targeted academic paper draft:
 
 1. **Ingest.** Pulls the README, file tree, and a ranked sample of source files from any GitHub repo. Concatenates into a single bundle under a 600K-token cap.
 2. **Summarize.** Sends the bundle to Gemini through Vercel AI Gateway (1M-context window). Gets back a structured `ResearchSummary`: problem, contribution, method, results, limitations, keywords.
-3. **Match.** Embeds the summary and ranks 41 hand-curated CFPs (NeurIPS, ICLR, ICML, ACL, EMNLP, KDD, CVPR, ML4H, MICCAI, CHIL, AMIA, workshops, journals) in ClickHouse Cloud by semantic fit + deadline proximity.
+3. **Match.** Embeds the summary and ranks 41 hand-curated CFPs (NeurIPS, ICLR, ICML, ACL, EMNLP, KDD, CVPR, ML4H, MICCAI, CHIL, AMIA, workshops, journals) in ClickHouse Cloud by semantic fit + deadline proximity. **Augmented with live Nimble Search:** the same step also queries the open web for "<keywords> conference <year> paper submission deadline," embeds each web hit against the summary, and merges the top 3 into the candidate pool. Venue cards in the UI carry a `LIVE · Nimble` or `Curated` badge so the source is always visible.
 4. **Draft.** Streams a paper section-by-section through Claude: abstract, intro, related work, method. The related-work section is citation-grounded — the model is given a pre-filtered list of arxiv candidates from ClickHouse and a strict "cite ONLY these" instruction. Any unsanctioned `[arxiv:...]` marker is stripped post-hoc with a visible warning.
 5. **Export.** Downloads as LaTeX + BibTeX, ready to open in Overleaf.
 6. **Extract Claude plugin (bonus).** A second pass over the same repo bundle identifies reusable units inside the code and packages them as a complete Claude Code plugin: `SKILL.md` files, slash commands, subagents, lifecycle hooks (PreToolUse / PostToolUse / Stop / etc.), and MCP server build prompts -- bundled with a `plugin.json` manifest in the standard `~/.claude/plugins/<name>/` layout. Download as a single drop-in zip.
@@ -79,12 +79,13 @@ Every generated artifact (LaTeX paper, BibTeX, Claude Code plugin zip) is writte
 
 ### Live web data (Nimble)
 
-`paperpilot/nimble_client.py` wraps three Nimble SDK endpoints (`/v1/search`, `/v1/search` with `include_answer: true`, `/v1/extract`) behind a 5-8s timeout and `trace.step` instrumentation. Two surfaces in the UI use it:
+`paperpilot/nimble_client.py` wraps three Nimble SDK endpoints (`/v1/search`, `/v1/search` with `include_answer: true`, `/v1/extract`) behind a 5-8s timeout and `trace.step` instrumentation. Three surfaces in the UI use it:
 
+- **Venue discovery (critical path, `cfp_match.py:_nimble_candidate_venues`).** Nimble Search runs alongside the ClickHouse cosine-distance ranking and contributes up to 3 live web venues into the candidate pool. Each hit is embedded and scored with the same formula as curated venues so they compete fairly. UI venue cards carry a `LIVE · Nimble` or `Curated` badge.
 - After ingest, the chosen venue card exposes a **Live web check** that runs Search (top hits for `<venue> <year> deadline`) + Extract (the CFP page itself) to validate the curated `data/cfp_seed.json` against live web reality.
 - After plugin extraction, **Check prior art** runs Nimble Answers ("are there existing Claude Code plugins / MCP servers that do this?") so the user can see ecosystem overlap before publishing.
 
-Set `NIMBLE_API_KEY` to enable; without it the buttons hide and the sponsor wire shows `off`. All Nimble calls show up in the trace panel under the orange `nimble.*` color.
+Set `NIMBLE_API_KEY` to enable; without it the buttons hide, venue ranking falls back to ClickHouse-only, and the sponsor wire shows `off`. All Nimble calls show up in the trace panel under the orange `nimble.*` color.
 
 ---
 

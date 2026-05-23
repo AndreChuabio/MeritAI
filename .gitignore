@@ -45,5 +45,6 @@ submission/*.out
 .claude/settings.local.json
 
 # Local rollback safety nets (kept in working tree, never committed)
+*-backup
 *.demo-backup
 *.concern-backup

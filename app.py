@@ -429,11 +429,30 @@ with left:
             cols = st.columns(min(len(st.session_state.venues), 3))
             for i, venue in enumerate(st.session_state.venues):
                 col = cols[i % len(cols)]
+                is_nimble = venue.id.startswith("nimble:")
                 with col:
                     with st.container(border=True):
-                        st.markdown(f"**{venue.name}**")
+                        # Origin badge: curated ClickHouse corpus vs live Nimble Search.
+                        if is_nimble:
+                            st.markdown(
+                                f"**{venue.name}** "
+                                "<span style='background:#fb923c;color:white;"
+                                "font-size:10px;padding:2px 6px;border-radius:4px;'>"
+                                "LIVE · Nimble</span>",
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            st.markdown(
+                                f"**{venue.name}** "
+                                "<span style='background:#3b82f6;color:white;"
+                                "font-size:10px;padding:2px 6px;border-radius:4px;'>"
+                                "Curated</span>",
+                                unsafe_allow_html=True,
+                            )
                         st.caption(f"fit `{venue.fit_score:.3f}` · {venue.days_until_deadline} days")
                         st.write(venue.scope[:160] + ("..." if len(venue.scope) > 160 else ""))
+                        if is_nimble and venue.url:
+                            st.caption(f"[live source]({venue.url})")
                         if st.button(f"Draft for {venue.name}", key=f"draft_{venue.id}"):
                             st.session_state.chosen_venue = venue
                             st.session_state.sections = {}
