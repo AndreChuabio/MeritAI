@@ -1,0 +1,330 @@
+[
+  {
+    "id": "neurips2026-main",
+    "name": "NeurIPS 2026",
+    "scope": "General-interest machine learning, deep learning, reinforcement learning, optimization, statistical learning theory, probabilistic methods, neuroscience, biological learning, foundation models, generative AI, alignment and safety, and applications across vision, language, robotics, and the sciences.",
+    "deadline": "2026-05-15",
+    "format": "9-page full paper (LaTeX, NeurIPS template)",
+    "url": "https://neurips.cc/Conferences/2026"
+  },
+  {
+    "id": "icml2026-main",
+    "name": "ICML 2026",
+    "scope": "Core machine learning research: representation learning, optimization, theory, deep learning, reinforcement learning, probabilistic methods, kernel methods, online learning, applications.",
+    "deadline": "2026-01-30",
+    "format": "8-page full paper (ICML template)",
+    "url": "https://icml.cc/Conferences/2026"
+  },
+  {
+    "id": "iclr2026-main",
+    "name": "ICLR 2026",
+    "scope": "Representation learning. Deep learning theory and practice, generative models, self-supervised learning, multimodal models, training methods, scaling, alignment.",
+    "deadline": "2025-09-25",
+    "format": "9-page main paper",
+    "url": "https://iclr.cc/Conferences/2026"
+  },
+  {
+    "id": "aaai2026-main",
+    "name": "AAAI 2026",
+    "scope": "Broad AI: knowledge representation, planning, search, reasoning, multi-agent systems, machine learning, NLP, vision, robotics, AI for social good.",
+    "deadline": "2025-08-15",
+    "format": "7-page full paper",
+    "url": "https://aaai.org/conference/aaai/aaai-26/"
+  },
+  {
+    "id": "acl2026-main",
+    "name": "ACL 2026",
+    "scope": "Computational linguistics and natural language processing: language models, dialogue, summarization, translation, semantics, syntax, multilinguality, evaluation.",
+    "deadline": "2026-02-15",
+    "format": "8-page long paper",
+    "url": "https://2026.aclweb.org"
+  },
+  {
+    "id": "emnlp2026-main",
+    "name": "EMNLP 2026",
+    "scope": "Empirical methods in NLP: language modeling, retrieval, structured prediction, generation, evaluation, interpretability, multilingual NLP.",
+    "deadline": "2026-06-15",
+    "format": "8-page long paper",
+    "url": "https://2026.emnlp.org"
+  },
+  {
+    "id": "kdd2026-main",
+    "name": "KDD 2026",
+    "scope": "Data mining, knowledge discovery, applied machine learning, large-scale data systems, recommender systems, graph learning, anomaly detection.",
+    "deadline": "2026-02-08",
+    "format": "9-page paper",
+    "url": "https://kdd.org/kdd2026/"
+  },
+  {
+    "id": "cvpr2026-main",
+    "name": "CVPR 2026",
+    "scope": "Computer vision and pattern recognition: detection, segmentation, generation, 3D reconstruction, video understanding, embodied vision, multimodal.",
+    "deadline": "2025-11-14",
+    "format": "8-page main paper",
+    "url": "https://cvpr.thecvf.com/Conferences/2026"
+  },
+  {
+    "id": "iccv2027-main",
+    "name": "ICCV 2027",
+    "scope": "International Conference on Computer Vision. Vision, 3D, video, multimodal, generative models.",
+    "deadline": "2027-03-10",
+    "format": "8-page main paper",
+    "url": "https://iccv.thecvf.com"
+  },
+  {
+    "id": "nips2026-mlsys",
+    "name": "MLSys 2026",
+    "scope": "Systems for ML: training infrastructure, inference serving, hardware accelerators, distributed training, efficient algorithms, model compression, ML for systems.",
+    "deadline": "2025-10-10",
+    "format": "9-page paper",
+    "url": "https://mlsys.org/Conferences/2026"
+  },
+  {
+    "id": "ml4h2026-main",
+    "name": "ML4H 2026",
+    "scope": "Machine Learning for Health: clinical NLP, medical imaging, EHR mining, biomedical knowledge graphs, predictive modeling, fairness in clinical AI, multimodal medical AI, LLM applications in clinical workflows, clinical agent observability.",
+    "deadline": "2026-07-04",
+    "format": "10-page proceedings track, 4-page findings track",
+    "url": "https://ml4h.cc/2026"
+  },
+  {
+    "id": "chil2026-main",
+    "name": "CHIL 2026",
+    "scope": "Conference on Health, Inference, and Learning. Methods + applications of ML in health, including causal inference, fairness, deployment, clinical decision support.",
+    "deadline": "2026-01-08",
+    "format": "10-page paper",
+    "url": "https://chil.ahli.cc/2026/"
+  },
+  {
+    "id": "amia2026-symp",
+    "name": "AMIA 2026 Annual Symposium",
+    "scope": "Biomedical and health informatics: clinical informatics, public health, translational bioinformatics, consumer health, education, applied AI in healthcare operations.",
+    "deadline": "2026-03-15",
+    "format": "5-page paper or 1-page poster",
+    "url": "https://amia.org/education-events/amia-2026-annual-symposium"
+  },
+  {
+    "id": "miccai2026-main",
+    "name": "MICCAI 2026",
+    "scope": "Medical image computing and computer-assisted intervention: segmentation, registration, surgical guidance, computational pathology, deep learning for medical imaging.",
+    "deadline": "2026-03-06",
+    "format": "8-page paper",
+    "url": "https://conferences.miccai.org/2026/"
+  },
+  {
+    "id": "uist2026-main",
+    "name": "UIST 2026",
+    "scope": "User interfaces and interactive systems: HCI, novel interactions, intelligent UIs, AI-assisted tools, mixed reality, accessibility.",
+    "deadline": "2026-04-04",
+    "format": "10-page paper",
+    "url": "https://uist.acm.org/2026"
+  },
+  {
+    "id": "chi2027-main",
+    "name": "CHI 2027",
+    "scope": "Human-computer interaction. Empirical studies, novel interfaces, AI-and-HCI, accessibility, social computing.",
+    "deadline": "2026-09-10",
+    "format": "Variable, archival paper",
+    "url": "https://chi2027.acm.org"
+  },
+  {
+    "id": "fair2026-acm",
+    "name": "ACM FAccT 2026",
+    "scope": "Fairness, accountability, and transparency in sociotechnical systems: algorithmic audits, bias measurement, governance, deployment studies.",
+    "deadline": "2026-01-10",
+    "format": "10-page paper",
+    "url": "https://facctconference.org/2026"
+  },
+  {
+    "id": "neurips2025-ws-genai-health",
+    "name": "NeurIPS 2025 Workshop: GenAI for Health",
+    "scope": "Workshop on generative AI for healthcare: LLMs for clinical text, multimodal medical generation, evaluation, safety, deployment case studies.",
+    "deadline": "2025-09-12",
+    "format": "4-page workshop paper",
+    "url": "https://neurips.cc/Conferences/2025/Workshops"
+  },
+  {
+    "id": "iclr2026-ws-agents",
+    "name": "ICLR 2026 Workshop on Agentic AI",
+    "scope": "Agentic AI systems: tool-using LLMs, multi-step reasoning, planning, evaluation of agents, autonomous coding, agent observability.",
+    "deadline": "2026-02-04",
+    "format": "5-page workshop paper",
+    "url": "https://iclr.cc/Conferences/2026/Workshops"
+  },
+  {
+    "id": "icml2026-ws-llmsys",
+    "name": "ICML 2026 Workshop on LLM Systems",
+    "scope": "Systems-of-LLMs: prompting infrastructure, retrieval-augmented generation, agent frameworks, observability, evaluation harnesses, cost-aware serving.",
+    "deadline": "2026-05-18",
+    "format": "6-page workshop paper",
+    "url": "https://icml.cc/Conferences/2026/Workshops"
+  },
+  {
+    "id": "neurips2026-ws-eval",
+    "name": "NeurIPS 2026 Workshop on Evaluation of Foundation Models",
+    "scope": "How we evaluate foundation models in practice: benchmarks, leakage, calibration, human-in-the-loop, scaling laws of evaluation.",
+    "deadline": "2026-09-12",
+    "format": "5-page workshop paper",
+    "url": "https://neurips.cc/Conferences/2026/Workshops"
+  },
+  {
+    "id": "nlpwf2026-clinical",
+    "name": "ClinicalNLP 2026 Workshop @ NAACL",
+    "scope": "Clinical NLP: notes summarization, ICD coding, entity extraction, de-identification, clinical reasoning with LLMs.",
+    "deadline": "2026-02-26",
+    "format": "8-page workshop paper",
+    "url": "https://clinical-nlp.github.io/2026/"
+  },
+  {
+    "id": "iclr2026-ws-safety",
+    "name": "ICLR 2026 Workshop on Safety in Generative AI",
+    "scope": "AI safety: red teaming, alignment, adversarial robustness, jailbreaks, model cards, auditing.",
+    "deadline": "2026-02-04",
+    "format": "5-page workshop paper",
+    "url": "https://iclr.cc/Conferences/2026/Workshops"
+  },
+  {
+    "id": "ml4h2025-findings",
+    "name": "ML4H 2025 Findings Track",
+    "scope": "Workshop track for clinical ML preliminary results, negative results, case studies. Wide topic scope including healthcare LLM agents.",
+    "deadline": "2025-09-15",
+    "format": "4-page short paper",
+    "url": "https://ml4h.cc/2025"
+  },
+  {
+    "id": "neurips2026-ws-obs",
+    "name": "NeurIPS 2026 Workshop on Observability for AI",
+    "scope": "Observability tooling for AI agents and LLM applications: tracing, evaluation in prod, drift detection, cost attribution, healthcare-grade audit logs.",
+    "deadline": "2026-09-22",
+    "format": "6-page workshop paper",
+    "url": "https://neurips.cc/Conferences/2026/Workshops"
+  },
+  {
+    "id": "rsna2026-main",
+    "name": "RSNA 2026",
+    "scope": "Radiology + AI in medical imaging. Scientific presentations and posters.",
+    "deadline": "2026-04-08",
+    "format": "Abstract + scientific paper",
+    "url": "https://www.rsna.org/annual-meeting"
+  },
+  {
+    "id": "sigir2026-main",
+    "name": "SIGIR 2026",
+    "scope": "Information retrieval, search engines, ranking, recommender systems, conversational IR, retrieval-augmented generation.",
+    "deadline": "2026-01-29",
+    "format": "Full paper, 9 pages",
+    "url": "https://sigir2026.org"
+  },
+  {
+    "id": "www2026-main",
+    "name": "The Web Conference 2026",
+    "scope": "Web technologies: crawling, search, social networks, web applications, large-scale ML on the web, agentic browsers.",
+    "deadline": "2025-10-13",
+    "format": "Full paper, 10 pages",
+    "url": "https://www2026.thewebconf.org"
+  },
+  {
+    "id": "wsdm2026-main",
+    "name": "WSDM 2026",
+    "scope": "Web search and data mining: ranking, social network analysis, recommender systems, A/B testing.",
+    "deadline": "2025-08-25",
+    "format": "9-page paper",
+    "url": "https://www.wsdm-conference.org/2026/"
+  },
+  {
+    "id": "naacl2026-main",
+    "name": "NAACL 2026",
+    "scope": "North American chapter of ACL. Same scope as ACL: NLP, language models, dialogue, translation, semantics.",
+    "deadline": "2025-10-20",
+    "format": "8-page long paper",
+    "url": "https://2026.naacl.org"
+  },
+  {
+    "id": "uai2026-main",
+    "name": "UAI 2026",
+    "scope": "Uncertainty in AI: probabilistic graphical models, Bayesian inference, causal inference, probabilistic programming.",
+    "deadline": "2026-02-12",
+    "format": "9-page paper",
+    "url": "https://www.auai.org/uai2026/"
+  },
+  {
+    "id": "aistats2026-main",
+    "name": "AISTATS 2026",
+    "scope": "AI and statistics: theory of machine learning, kernel methods, Bayesian, optimization, statistical learning.",
+    "deadline": "2025-10-09",
+    "format": "9-page paper",
+    "url": "https://aistats.org/aistats2026/"
+  },
+  {
+    "id": "iclr2026-ws-mlhealth",
+    "name": "ICLR 2026 Workshop on ML for Healthcare",
+    "scope": "Workshop on ML for healthcare: clinical LLM agents, multimodal medical AI, deployment studies, fairness, evaluation.",
+    "deadline": "2026-02-04",
+    "format": "5-page workshop paper",
+    "url": "https://iclr.cc/Conferences/2026/Workshops"
+  },
+  {
+    "id": "ehealth2026-iet",
+    "name": "ICDH 2026 (Digital Health)",
+    "scope": "IEEE International Conference on Digital Health: digital therapeutics, remote monitoring, clinical decision support, healthcare ops automation.",
+    "deadline": "2026-04-15",
+    "format": "8-page paper",
+    "url": "https://conferences.computer.org/services/2026/icdh.html"
+  },
+  {
+    "id": "ml4health2026-jb",
+    "name": "Machine Learning for Healthcare 2026 (MLHC)",
+    "scope": "Methods and deployment of ML in clinical care. Hospital data, multimodal records, fairness, reliability, agent-assisted workflows.",
+    "deadline": "2026-04-04",
+    "format": "10-page paper",
+    "url": "https://www.mlforhc.org/"
+  },
+  {
+    "id": "ai4code2026-iclr-ws",
+    "name": "ICLR 2026 Workshop on AI for Code",
+    "scope": "AI for programming: code generation, repository understanding, agentic developers, eval benchmarks.",
+    "deadline": "2026-02-04",
+    "format": "5-page workshop paper",
+    "url": "https://iclr.cc/Conferences/2026/Workshops"
+  },
+  {
+    "id": "scipy2026-main",
+    "name": "SciPy 2026",
+    "scope": "Scientific computing in Python: data tools, scientific software, reproducibility, applications.",
+    "deadline": "2026-04-01",
+    "format": "Talk proposal + paper",
+    "url": "https://conference.scipy.org/scipy2026"
+  },
+  {
+    "id": "pydata-nyc-2026",
+    "name": "PyData NYC 2026",
+    "scope": "Data science and engineering with Python. Practitioner-track talks; informal write-ups.",
+    "deadline": "2026-08-15",
+    "format": "Talk proposal",
+    "url": "https://pydata.org/nyc2026/"
+  },
+  {
+    "id": "stat-ml-2026-jrss",
+    "name": "JRSS-B Discussion Paper Track",
+    "scope": "Journal of the Royal Statistical Society. Statistical methodology, including ML theory and applications.",
+    "deadline": "2026-12-01",
+    "format": "Full journal article",
+    "url": "https://rss.org.uk"
+  },
+  {
+    "id": "patterns2026-cell",
+    "name": "Patterns (Cell Press)",
+    "scope": "Cell Press journal on data science and ML across the sciences and applied domains, including healthcare.",
+    "deadline": "2026-12-31",
+    "format": "Rolling submission, full article",
+    "url": "https://www.cell.com/patterns/home"
+  },
+  {
+    "id": "npj-digit-med-2026",
+    "name": "npj Digital Medicine",
+    "scope": "Nature Partner Journal on digital medicine: clinical AI, wearable health, telemedicine, deployment evidence.",
+    "deadline": "2026-12-31",
+    "format": "Rolling submission, full article",
+    "url": "https://www.nature.com/npjdigitalmed/"
+  }
+]
