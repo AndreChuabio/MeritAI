@@ -5,7 +5,7 @@ Two surfaces in one file:
   - Full pipeline: paste GitHub URL -> summary -> ranked CFPs -> paper draft
 
 Launch:
-    DD_API_KEY=$DD_API_KEY lapdog streamlit run app.py
+    DD_API_KEY=$DD_API_KEY lapdog streamlit run Productize.py
 
 Without Lapdog wrap, the app still runs -- it just won't appear in the local
 Lapdog dashboard (which is fine for ad-hoc debugging).
@@ -27,8 +27,8 @@ from paperpilot.pipeline import load_demo_cache
 
 load_dotenv()
 
-st.set_page_config(page_title="Productionize Your Product", page_icon="📄", layout="wide")
-st.title("Productionize Your Product")
+st.set_page_config(page_title="Productize", page_icon="📄", layout="wide")
+st.title("Productize")
 st.caption(
     "GitHub repo → Gemini summary → ClickHouse venue match → Claude paper draft. "
     "Traced end-to-end by Datadog Lapdog."
