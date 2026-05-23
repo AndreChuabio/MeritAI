@@ -12,4 +12,4 @@ cmds = [
 
 [start]
 # Railway calls this; railway.toml startCommand overrides if both are set.
-cmd = "uv run ddtrace-run streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
+cmd = "uv run ddtrace-run streamlit run Productize.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"

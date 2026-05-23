@@ -29,7 +29,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "uv run ddtrace-run streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
+startCommand = "uv run ddtrace-run streamlit run Productize.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
 healthcheckPath = "/_stcore/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

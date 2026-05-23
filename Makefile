@@ -4,17 +4,17 @@
 # Lapdog finds OUR streamlit (which has ddtrace) -- a bare `streamlit`
 # would resolve to system anaconda's copy.
 dev-local:
-	lapdog .venv/bin/streamlit run app.py
+	lapdog .venv/bin/streamlit run Productize.py
 
 # Run with Datadog cloud forward as well (LLM Obs trace lands in DD cloud).
 # Streamlit loads .env via load_dotenv(); the agentless flag makes ddtrace
 # ship directly bypassing Lapdog's port-8126 contention.
 dev:
-	DD_LLMOBS_AGENTLESS_ENABLED=1 lapdog .venv/bin/streamlit run app.py
+	DD_LLMOBS_AGENTLESS_ENABLED=1 lapdog .venv/bin/streamlit run Productize.py
 
 # Run Streamlit raw, no Lapdog -- for debugging the UI without telemetry.
 dev-raw:
-	uv run streamlit run app.py
+	uv run streamlit run Productize.py
 
 # Seed ClickHouse with CFP + arxiv corpora.
 seed:
