@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import os
-import time
+from datetime import datetime
 from typing import Any, Iterable
 
 import clickhouse_connect
@@ -111,7 +111,7 @@ def insert_trace(
     client = client or get_client()
     client.insert(
         "trace_log",
-        [[session_id, time.time(), kind, json.dumps(payload, default=str)]],
+        [[session_id, datetime.now(), kind, json.dumps(payload, default=str)]],
         column_names=["session_id", "ts", "kind", "payload"],
     )
 
