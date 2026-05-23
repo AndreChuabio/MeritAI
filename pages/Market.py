@@ -63,29 +63,41 @@ tab_brand, tab_generate = st.tabs(["Personal Brand", "Generate"])
 # Personal Brand tab — user-facing profile (Senso under the hood)
 # =========================================================================
 with tab_brand:
-    st.subheader("Your Personal Brand")
+    st.subheader("Build Your Profile")
     st.caption("Define your voice, story, and links. We use this to draft every outreach.")
 
     col_l, col_r = st.columns(2)
-    name = col_l.text_input("Name", value=st.session_state.get("brand_name", ""))
-    title = col_r.text_input("Title", value=st.session_state.get("brand_title", ""))
+    name = col_l.text_input("Name", value=st.session_state.get("brand_name", "Nikki"))
+    title = col_r.text_input("Title", value=st.session_state.get("brand_title", "Software Engineer"))
     about = st.text_area(
         "About",
-        value=st.session_state.get("brand_about", ""),
+        value=st.session_state.get(
+            "brand_about",
+            "I want to work on building my career and work towards O1 visa.",
+        ),
         placeholder="3-5 sentences. Who you are, what you work on, who you help.",
         height=120,
     )
     voice = st.text_area(
         "Voice & tone",
-        value=st.session_state.get("brand_voice", ""),
+        value=st.session_state.get(
+            "brand_voice",
+            "professional, warm and succinct.",
+        ),
         placeholder="e.g. warm, evidence-based, jargon-free — like a clinician explaining to a peer.",
         height=80,
     )
 
     st.markdown("**Links**")
     c1, c2 = st.columns(2)
-    github_url   = c1.text_input("GitHub",   value=st.session_state.get("brand_github", ""))
-    linkedin_url = c2.text_input("LinkedIn", value=st.session_state.get("brand_linkedin", ""))
+    github_url   = c1.text_input(
+        "GitHub",
+        value=st.session_state.get("brand_github", "http://github.com/huhu42"),
+    )
+    linkedin_url = c2.text_input(
+        "LinkedIn",
+        value=st.session_state.get("brand_linkedin", "https://www.linkedin.com/in/nikkihu/"),
+    )
     c3, c4 = st.columns(2)
     scholar_url  = c3.text_input("Google Scholar", value=st.session_state.get("brand_scholar", ""))
     site_url     = c4.text_input("Site",     value=st.session_state.get("brand_site", ""))
