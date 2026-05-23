@@ -19,11 +19,35 @@ import clickhouse_connect
 from clickhouse_connect.driver.client import Client
 
 
+def _normalize_host(raw: str) -> tuple[str, int | None]:
+    """Strip protocol prefix and trailing port; return (host, port_or_None).
+
+    ClickHouse Cloud's Connect modal sometimes copies the host as
+    `https://xxx.cloud:8443`. The driver wants just the bare host plus a
+    numeric port. This handles either format gracefully.
+    """
+    h = raw.strip()
+    for prefix in ("https://", "http://"):
+        if h.lower().startswith(prefix):
+            h = h[len(prefix) :]
+    port: int | None = None
+    if ":" in h:
+        h, port_str = h.rsplit(":", 1)
+        try:
+            port = int(port_str)
+        except ValueError:
+            port = None
+    return h.rstrip("/"), port
+
+
 def get_client() -> Client:
     """Open a ClickHouse client using env config."""
+    host_raw = os.environ["CLICKHOUSE_HOST"]
+    host, embedded_port = _normalize_host(host_raw)
+    port = embedded_port or int(os.environ.get("CLICKHOUSE_PORT", "8443"))
     return clickhouse_connect.get_client(
-        host=os.environ["CLICKHOUSE_HOST"],
-        port=int(os.environ.get("CLICKHOUSE_PORT", "8443")),
+        host=host,
+        port=port,
         username=os.environ.get("CLICKHOUSE_USER", "default"),
         password=os.environ["CLICKHOUSE_PASSWORD"],
         database=os.environ.get("CLICKHOUSE_DATABASE", "default"),

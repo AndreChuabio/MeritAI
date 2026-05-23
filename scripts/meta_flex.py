@@ -17,14 +17,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-from paperpilot import trace
-from paperpilot.draft import draft_paper
-from paperpilot.github_ingest import fetch_repo
-from paperpilot.latex_export import export_paper
-from paperpilot.llm_ingest import summarize_repo
-from paperpilot.cfp_match import rank_venues
+from dotenv import load_dotenv  # noqa: E402
+
+from paperpilot import trace  # noqa: E402
+from paperpilot.draft import draft_paper  # noqa: E402
+from paperpilot.github_ingest import fetch_repo  # noqa: E402
+from paperpilot.latex_export import export_paper  # noqa: E402
+from paperpilot.llm_ingest import summarize_repo  # noqa: E402
+from paperpilot.cfp_match import rank_venues  # noqa: E402
 
 
 SUBMISSION_DIR = Path(__file__).resolve().parent.parent / "submission"

@@ -10,10 +10,14 @@ Usage:
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-from dotenv import load_dotenv
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-from paperpilot.pipeline import write_demo_cache
+from dotenv import load_dotenv  # noqa: E402
+
+from paperpilot.pipeline import write_demo_cache  # noqa: E402
 
 
 def main() -> None:

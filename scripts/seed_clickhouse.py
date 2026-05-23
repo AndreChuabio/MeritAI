@@ -10,19 +10,23 @@ is preserved.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-from dotenv import load_dotenv
+# Make `paperpilot` importable when running this script directly via `uv run`.
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-from paperpilot.clickhouse_client import EMBED_DIM, get_client, init_schema
-from paperpilot.embed import embed_many
+from dotenv import load_dotenv  # noqa: E402
+
+from paperpilot.clickhouse_client import EMBED_DIM, get_client, init_schema  # noqa: E402
+from paperpilot.embed import embed_many  # noqa: E402
 
 
 load_dotenv()
 
-ROOT = Path(__file__).resolve().parent.parent
 CFP_PATH = ROOT / "data" / "cfp_seed.json"
 ARXIV_PATH = ROOT / "data" / "arxiv_seed.json"
 
