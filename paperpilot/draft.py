@@ -13,7 +13,7 @@ from typing import Any, Generator, Iterable
 
 import tiktoken
 
-from paperpilot import trace
+from paperpilot import senso_client, trace
 from paperpilot.arxiv_lookup import (
     PaperMeta,
     candidates_from_clickhouse,
@@ -170,6 +170,31 @@ def _strip_unapproved(text: str, approved_ids: set[str]) -> tuple[str, list[str]
     return CITATION_RE.sub(sub, text), dropped
 
 
+def _senso_tone_block(
+    section: str, summary: ResearchSummary, venue: VenueMatch, session_id: str
+) -> str:
+    """Pull 2-3 tone-reference chunks from Senso for this section + venue.
+
+    Returns a formatted block to prepend to the user_prompt, or empty string
+    when Senso isn't configured / KB returns nothing. Best-effort.
+    """
+    if not senso_client.is_configured():
+        return ""
+    keywords = ", ".join(summary.keywords[:4]) if summary.keywords else section
+    query = f"{venue.name} {section} academic paper tone {keywords}"
+    chunks = senso_client.search_context(query, session_id, max_results=3)
+    if not chunks:
+        return ""
+    block_lines = [
+        "Reference tone exemplars (from a curated Senso KB of accepted",
+        f"papers similar to {venue.name}; match this register, do NOT quote):",
+    ]
+    for c in chunks[:3]:
+        snippet = c.text[:280].strip().replace("\n", " ")
+        block_lines.append(f"- ({c.source}) {snippet}")
+    return "\n".join(block_lines) + "\n\n"
+
+
 def draft_section(
     section: str,
     summary: ResearchSummary,
@@ -179,6 +204,10 @@ def draft_section(
 ) -> Generator[str, None, DraftSection]:
     """Stream a paper section, yielding deltas as they arrive."""
     sys_prompt, user_prompt = _section_prompt(section, summary, venue, candidates)
+    # Inject Senso tone reference (no-op when Senso is not configured).
+    tone_block = _senso_tone_block(section, summary, venue, session_id)
+    if tone_block:
+        user_prompt = tone_block + user_prompt
     model = DEFAULTS["draft"]
 
     with trace.step(

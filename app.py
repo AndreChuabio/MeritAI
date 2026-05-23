@@ -72,6 +72,7 @@ def _env_summary() -> dict[str, str]:
         "ClickHouse Cloud": "configured" if os.environ.get("CLICKHOUSE_HOST") else "missing",
         "Datadog Lapdog forward": "enabled" if os.environ.get("DD_API_KEY") else "off",
         "Nimble web data": "live" if os.environ.get("NIMBLE_API_KEY") else "off",
+        "Senso KB context": "live" if os.environ.get("SENSO_API_KEY") else "off",
     }
 
 
@@ -82,6 +83,7 @@ _STAGE_COLOR = {
     "draft": "#8b5cf6",    # purple
     "skill": "#06b6d4",    # cyan (skill extraction)
     "nimble": "#fb923c",   # orange (Nimble web data)
+    "senso": "#d946ef",    # fuchsia (Senso KB context)
     "artifact": "#84cc16", # lime (persisted artifact)
     "llm": "#94a3b8",      # slate (hello-world ping)
     "demo": "#ec4899",     # pink
