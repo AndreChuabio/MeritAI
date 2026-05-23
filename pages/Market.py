@@ -24,6 +24,7 @@ from paperpilot.outreach.log import (
 from paperpilot.outreach.orchestrator import generate_drafts
 from paperpilot.outreach.nimble import NimbleClient, NimbleAPIError
 from paperpilot.outreach.purpose import Purpose
+from paperpilot.outreach.scholar import fetch as fetch_scholar
 from paperpilot.outreach.senso import Senso, SensoAPIError
 
 
@@ -281,6 +282,38 @@ with tab_generate:
 # Blast tab — queued messages + Nimble-powered people search
 # =========================================================================
 with tab_blast:
+    # Paper selector — scopes both the queue context and the target search.
+    scholar_url_for_fetch = st.session_state.get("brand_scholar") or None
+    try:
+        scholar_data = fetch_scholar(scholar_url_for_fetch)
+        all_papers = scholar_data.papers or []
+    except Exception:
+        all_papers = []
+
+    if all_papers:
+        paper_options = [p["title"] for p in all_papers]
+        selected_paper_titles = st.multiselect(
+            "Papers this blast is about",
+            options=paper_options,
+            default=st.session_state.get("blast_papers", []),
+            help=(
+                "Pick the paper(s) this outreach is about. Selected titles "
+                "are added to the target search and shown next to every "
+                "queued message."
+            ),
+        )
+        st.session_state["blast_papers"] = selected_paper_titles
+    else:
+        selected_paper_titles = []
+        st.caption("No papers found on your Scholar profile. Skipping paper picker.")
+
+    if selected_paper_titles:
+        st.markdown(
+            "**About: " + " · ".join(f"_{t}_" for t in selected_paper_titles) + "**"
+        )
+
+    st.divider()
+
     st.subheader("Blast Queue")
     st.caption("Messages you've added from Generate Content. Send to relevant targets in one batch.")
 
@@ -328,10 +361,14 @@ with tab_blast:
         if not criteria.strip():
             st.warning("Enter a criteria to search.")
         else:
+            # Augment criteria with the selected paper titles so the search
+            # surfaces people connected to that work.
+            paper_aug = " ".join(f'"{t}"' for t in selected_paper_titles)
+            augmented = f"{criteria} {paper_aug}".strip()
             try:
                 nimble = NimbleClient.from_env()
                 with st.spinner("Searching via Nimble..."):
-                    people = nimble.find_people(criteria, limit=limit)
+                    people = nimble.find_people(augmented, limit=limit)
                     emails: list[dict] = []
                     if include_email and people:
                         # Heuristic email-finding search per matched name.
