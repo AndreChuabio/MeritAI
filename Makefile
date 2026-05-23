@@ -24,6 +24,12 @@ seed:
 fetch-arxiv:
 	uv run python scripts/fetch_arxiv.py
 
+# One-shot Nimble crawl -> ClickHouse cfp table. Up to 20 fresh venues.
+# Requires NIMBLE_API_KEY; no-ops if missing. Longer Nimble timeout because
+# broad search queries can take 15-25s upstream.
+refresh-corpus:
+	NIMBLE_TIMEOUT_S=30 uv run python scripts/refresh_cfp_corpus.py
+
 # Smoke: minimal LLM ping (no UI). Useful before launching the app.
 ping:
 	uv run python -c "from dotenv import load_dotenv; load_dotenv(); from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session()))"
