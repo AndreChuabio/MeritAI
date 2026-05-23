@@ -115,11 +115,11 @@ def test_get_or_create_returns_existing_id_without_post():
     responses.add(
         responses.GET,
         "https://apiv2.senso.ai/api/v1/org/content-types",
-        json={"items": [{"id": "ct-existing", "name": "linkedin_dm_career"}]},
+        json={"items": [{"id": "ct-existing", "name": "linkedin_dm"}]},
         status=200,
     )
     s = Senso(api_key="k")
-    ctid = s.get_or_create_content_type("linkedin_dm_career", {"template": "ignored"})
+    ctid = s.get_or_create_content_type("linkedin_dm", {"template": "ignored"})
     assert ctid == "ct-existing"
     assert len(responses.calls) == 1
 

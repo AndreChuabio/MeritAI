@@ -130,12 +130,23 @@ class Senso:
 
     # ---- Questions (geo_questions / prompts) ----
 
+    # Senso enforces a 255-char cap on question_text. Trim to 240 for margin.
+    QUESTION_TEXT_MAX = 240
+
     def create_question(self, question_text: str, q_type: str = "awareness") -> str:
-        """Create a geo_question; return its id."""
+        """Create a geo_question; return its id.
+
+        Senso requires `question_text` <= 255 chars. We trim to 240 and
+        append an ellipsis so the model sees it was clipped. Full author
+        context already lives in the brand-kit + content-type template.
+        """
+        text = (question_text or "").strip()
+        if len(text) > self.QUESTION_TEXT_MAX:
+            text = text[: self.QUESTION_TEXT_MAX - 1].rstrip() + "…"
         resp = self._request(
             "POST",
             "/org/questions",
-            json={"question_text": question_text, "type": q_type},
+            json={"question_text": text, "type": q_type},
         )
         return resp["geo_question_id"]
 

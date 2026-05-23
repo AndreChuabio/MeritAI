@@ -15,8 +15,8 @@ class Purpose(str, Enum):
 
 PURPOSE_CHANNELS: dict[Purpose, list[str]] = {
     Purpose.VISA:    ["email_speaker_pitch", "email_collaboration"],
-    Purpose.CAREER:  ["linkedin_dm_career"],
-    Purpose.NETWORK: ["email_collaboration", "linkedin_dm_career"],
+    Purpose.CAREER:  ["linkedin_dm"],
+    Purpose.NETWORK: ["email_collaboration", "linkedin_dm"],
     Purpose.BRAND:   ["linkedin_post_brand", "x_thread_brand"],
     Purpose.SERVICE: ["linkedin_post_brand", "email_service", "x_thread_brand"],
 }

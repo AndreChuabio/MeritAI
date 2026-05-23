@@ -22,7 +22,7 @@ CONTENT_TYPE_CONFIGS: dict[str, dict] = {
             "No inline links.",
         ],
     },
-    "linkedin_dm_career": {
+    "linkedin_dm": {
         "template": (
             "A short LinkedIn direct message, under 600 chars. Warm intro "
             "tone, reference one shared interest, end with one explicit ask."

@@ -8,7 +8,7 @@ def test_purpose_enum_has_five_values():
 
 
 def test_network_targets_collab_email_and_linkedin_dm():
-    assert channels_for(Purpose.NETWORK) == ["email_collaboration", "linkedin_dm_career"]
+    assert channels_for(Purpose.NETWORK) == ["email_collaboration", "linkedin_dm"]
 
 
 def test_purpose_channels_covers_all_purposes():
@@ -20,7 +20,7 @@ def test_visa_targets_speaker_and_collaboration_emails():
 
 
 def test_career_targets_linkedin_dm():
-    assert channels_for(Purpose.CAREER) == ["linkedin_dm_career"]
+    assert channels_for(Purpose.CAREER) == ["linkedin_dm"]
 
 
 def test_brand_targets_linkedin_post_and_x_thread():

@@ -89,7 +89,7 @@ speaking_count = by_channel.get("email_speaker_pitch", 0)
 collab_count = by_channel.get("email_collaboration", 0)
 linkedin_count = (
     by_channel.get("linkedin_post_brand", 0)
-    + by_channel.get("linkedin_dm_career", 0)
+    + by_channel.get("linkedin_dm", 0)
 )
 x_count = by_channel.get("x_thread_brand", 0)
 service_count = by_channel.get("email_service", 0)
