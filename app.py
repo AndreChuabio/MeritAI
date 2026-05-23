@@ -84,7 +84,7 @@ with right:
     for label, status in _env_summary().items():
         icon = "🟢" if status in {"configured", "enabled", "on"} else "⚪"
         st.write(f"{icon} {label}: `{status}`")
-    st.caption("Lapdog dashboard: http://localhost:8126")
+    st.caption("Lapdog dashboard: https://lapdog.datadoghq.com (reads from local :8126)")
 
 
 with left:
