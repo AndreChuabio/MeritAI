@@ -22,6 +22,7 @@ from paperpilot.outreach.log import (
     find_user_profile_by_name,
 )
 from paperpilot.outreach.orchestrator import generate_drafts
+from paperpilot.outreach.nimble import NimbleClient, NimbleAPIError
 from paperpilot.outreach.purpose import Purpose
 from paperpilot.outreach.senso import Senso, SensoAPIError
 
@@ -60,7 +61,9 @@ if not _HAS_SENSO_KEY:
     )
 
 
-tab_brand, tab_generate = st.tabs(["Personal Brand", "Generate"])
+_HAS_NIMBLE_KEY = bool(os.environ.get("NIMBLE_API_KEY"))
+
+tab_brand, tab_generate, tab_blast = st.tabs(["Personal Brand", "Generate Content", "Blast"])
 
 
 # =========================================================================
@@ -248,15 +251,21 @@ with tab_generate:
         if card.error:
             st.error(f"Generation failed: {card.error}")
             continue
-        st.text_area(
+        edited = st.text_area(
             "Draft",
             value=card.markdown,
             key=f"draft_{i}_{card.sample_job_id}",
             height=240,
         )
         c1, c2 = st.columns([1, 1])
-        if c1.button("Copy", key=f"copy_{i}"):
-            st.toast("Copied to clipboard (demo)")
+        if c1.button("Add to Blast", key=f"blast_{i}", type="secondary"):
+            blast = st.session_state.setdefault("blast_queue", [])
+            blast.append({
+                "channel": card.channel,
+                "markdown": edited or card.markdown,
+                "sample_job_id": card.sample_job_id,
+            })
+            st.toast(f"Added {card.channel} to Blast ✓")
         if c2.button(f"Post to {card.channel.split('_')[0]}", key=f"post_{i}"):
             try:
                 outreach_log.mark_posted(
@@ -266,3 +275,113 @@ with tab_generate:
             except Exception:
                 pass  # CH mirror is best-effort
             st.toast(f"Posted to {card.channel} ✓ (demo)")
+
+
+# =========================================================================
+# Blast tab — queued messages + Nimble-powered people search
+# =========================================================================
+with tab_blast:
+    st.subheader("Blast Queue")
+    st.caption("Messages you've added from Generate Content. Send to relevant targets in one batch.")
+
+    blast = st.session_state.get("blast_queue", [])
+    if not blast:
+        st.info("Queue is empty. Generate a draft on the **Generate Content** tab and click **Add to Blast**.")
+    else:
+        for i, item in enumerate(blast):
+            with st.expander(f"{i + 1}. {item['channel']}", expanded=(i == 0)):
+                st.text_area(
+                    "Message",
+                    value=item["markdown"],
+                    key=f"blast_msg_{i}",
+                    height=180,
+                )
+                if st.button("Remove from queue", key=f"blast_remove_{i}"):
+                    blast.pop(i)
+                    st.rerun()
+        if st.button("Clear queue"):
+            st.session_state["blast_queue"] = []
+            st.rerun()
+
+    st.divider()
+
+    st.subheader("Find people to reach out to")
+    st.caption(
+        "Describe the audience. We search LinkedIn (and the open web for emails) "
+        "and return matching profiles you can blast to."
+    )
+
+    criteria = st.text_input(
+        "Audience criteria",
+        value=st.session_state.get(
+            "blast_criteria",
+            "clinical ML researchers in New York",
+        ),
+        placeholder="e.g. healthcare AI engineers in San Francisco, hiring",
+    )
+    col_a, col_b = st.columns([1, 1])
+    limit = col_a.slider("How many targets?", min_value=3, max_value=15, value=5)
+    include_email = col_b.checkbox("Also search for emails (slower)", value=False)
+
+    if st.button("Find Targets", type="primary", disabled=not _HAS_NIMBLE_KEY):
+        st.session_state["blast_criteria"] = criteria
+        if not criteria.strip():
+            st.warning("Enter a criteria to search.")
+        else:
+            try:
+                nimble = NimbleClient.from_env()
+                with st.spinner("Searching via Nimble..."):
+                    people = nimble.find_people(criteria, limit=limit)
+                    emails: list[dict] = []
+                    if include_email and people:
+                        # Heuristic email-finding search per matched name.
+                        for p in people[:3]:  # cap to 3 to keep demo fast
+                            name = (p.get("title") or "").split(" - ")[0].strip()
+                            if not name:
+                                continue
+                            try:
+                                hits = nimble.search(
+                                    f'"{name}" email contact',
+                                    focus="general",
+                                    max_results=2,
+                                )
+                                if hits:
+                                    emails.append({"name": name, "hits": hits})
+                            except NimbleAPIError:
+                                pass
+                st.session_state["blast_targets"] = people
+                st.session_state["blast_emails"] = emails
+                st.success(f"Found {len(people)} target(s).")
+            except NimbleAPIError as e:
+                st.error(f"Nimble error: {e}")
+            except KeyError:
+                st.error("NIMBLE_API_KEY missing in .env.")
+
+    if not _HAS_NIMBLE_KEY:
+        st.caption("`NIMBLE_API_KEY` not set — add it to `.env` to enable target search.")
+
+    targets = st.session_state.get("blast_targets", [])
+    if targets:
+        st.markdown(f"**Targets ({len(targets)})**")
+        for j, t in enumerate(targets):
+            with st.container(border=True):
+                title = t.get("title") or "(no title)"
+                desc = t.get("description") or ""
+                url = t.get("url") or ""
+                st.markdown(f"**{title}**")
+                if desc:
+                    st.caption(desc[:240])
+                if url:
+                    st.markdown(f"[Open profile →]({url})")
+                if blast:
+                    pick_label = "Send first queued message to this target"
+                    if st.button(pick_label, key=f"send_{j}"):
+                        st.toast(f"Queued send to {url} ✓ (demo)")
+
+    emails = st.session_state.get("blast_emails", [])
+    if emails:
+        st.markdown("**Email leads** (open-web search results)")
+        for e in emails:
+            with st.expander(e["name"]):
+                for h in e.get("hits", []):
+                    st.markdown(f"- [{h.get('title','(link)')}]({h.get('url','')}) — {h.get('description','')[:160]}")
