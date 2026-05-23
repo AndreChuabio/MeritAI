@@ -28,28 +28,28 @@ load_dotenv()
 st.set_page_config(page_title="Market — Outreach Drafts", page_icon="📣", layout="wide")
 st.title("📣 Market")
 st.caption(
-    "Senso-backed brand sync + purpose-driven draft generation. "
-    "Drafts powered by **Senso**. See your visa progress on the **Track** page."
+    "Personal-brand profile + purpose-driven outreach drafts. "
+    "See your visa progress on the **Track** page."
 )
 
 
 _HAS_SENSO_KEY = bool(os.environ.get("SENSO_API_KEY"))
 if not _HAS_SENSO_KEY:
     st.warning(
-        "`SENSO_API_KEY` not set. Brand sync + draft generation are disabled. "
-        "Add the key to `.env` and restart to enable Senso flows."
+        "Profile + draft generation are disabled until the brand engine is configured. "
+        "Set `SENSO_API_KEY` in `.env` and restart."
     )
 
 
-tab_brand, tab_generate = st.tabs(["Brand", "Generate"])
+tab_brand, tab_generate = st.tabs(["Personal Brand", "Generate"])
 
 
 # =========================================================================
-# Brand tab — Senso Brand Kit + ClickHouse mirror
+# Personal Brand tab — user-facing profile (Senso under the hood)
 # =========================================================================
 with tab_brand:
-    st.subheader("Your Brand on Senso")
-    st.caption("Synced to workspace **Agentic-hack** at apiv2.senso.ai")
+    st.subheader("Your Personal Brand")
+    st.caption("Define your voice, story, and links. We use this to draft every outreach.")
 
     col_l, col_r = st.columns(2)
     name = col_l.text_input("Name", value=st.session_state.get("brand_name", ""))
@@ -82,7 +82,7 @@ with tab_brand:
     )
 
     col_sync, col_load = st.columns([1, 1])
-    if col_sync.button("Sync to Senso", type="primary", disabled=not _HAS_SENSO_KEY):
+    if col_sync.button("Save My Profile", type="primary", disabled=not _HAS_SENSO_KEY):
         payload = {
             "brand_name": name,
             "brand_description": f"{about}\n\n{resume_text}".strip(),
@@ -99,9 +99,9 @@ with tab_brand:
         }
         try:
             Senso.from_env().put_brand_kit(payload)
-            st.success("Synced to Senso ✓")
+            st.success("Profile saved ✓")
         except SensoAPIError as e:
-            st.error(f"Senso error: {e}")
+            st.error(f"Save failed: {e}")
 
         # Mirror into ClickHouse user_profile (best-effort).
         try:
@@ -125,12 +125,12 @@ with tab_brand:
         st.session_state["brand_site"] = site_url
         st.session_state["brand_resume"] = resume_text
 
-    if col_load.button("Load current from Senso", disabled=not _HAS_SENSO_KEY):
+    if col_load.button("Load My Profile", disabled=not _HAS_SENSO_KEY):
         try:
             kit = Senso.from_env().get_brand_kit()
             st.json(kit)
         except SensoAPIError as e:
-            st.error(f"Senso error: {e}")
+            st.error(f"Load failed: {e}")
 
 
 # =========================================================================
