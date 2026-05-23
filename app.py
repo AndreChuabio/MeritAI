@@ -152,7 +152,9 @@ with left:
                     )
                     for v in cache["venues"]
                 ]
-                st.session_state.chosen_venue = st.session_state.venues[0]
+                st.session_state.chosen_venue = (
+                    st.session_state.venues[0] if st.session_state.venues else None
+                )
                 trace.log_event(
                     session_id,
                     "demo.cache_loaded",
@@ -170,7 +172,13 @@ with left:
                     st.session_state.venues = venues
                     st.session_state.chosen_venue = venues[0] if venues else None
                     st.session_state.sections = {}
-                    status.update(label="Ingest + match done", state="complete")
+                    if not venues:
+                        status.update(
+                            label="No CFPs matched within deadline horizon",
+                            state="error",
+                        )
+                    else:
+                        status.update(label="Ingest + match done", state="complete")
                 except Exception as exc:  # noqa: BLE001
                     status.update(label=f"Failed: {exc}", state="error")
                     st.exception(exc)

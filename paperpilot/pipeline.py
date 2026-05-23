@@ -92,6 +92,11 @@ def write_demo_cache(url: str) -> Path:
     """Run the pipeline once and serialize for DEMO_MODE."""
     sid = trace.new_session()
     bundle, summary, venues = ingest_and_match(url, sid)
+    if not venues:
+        raise RuntimeError(
+            "No CFPs matched within the deadline horizon. "
+            "Check data/cfp_seed.json deadlines or widen the horizon_days."
+        )
     venue = venues[0]
     sections: dict[str, DraftSection] = {}
     gen = draft_paper(summary, venue, sid)

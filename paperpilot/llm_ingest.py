@@ -8,6 +8,7 @@ structured output to the rest of the pipeline.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -15,6 +16,11 @@ from pydantic import BaseModel, Field
 from paperpilot import trace
 from paperpilot.github_ingest import RepoBundle, render_bundle
 from paperpilot.gateway import DEFAULTS, get_client
+
+
+# When response_format=json_object isn't honored cleanly by the provider, we
+# fall back to the first {...} block in the output.
+_JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
 SYSTEM_PROMPT = """You are a research scientist reviewing a GitHub repository to extract a paper-shaped summary.
@@ -75,10 +81,16 @@ def summarize_repo(bundle: RepoBundle, session_id: str) -> ResearchSummary:
             ctx["tokens_out"] = completion.usage.completion_tokens
         try:
             parsed: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            ctx["error"] = f"json_parse_failed: {exc!s}"
-            ctx["raw_preview"] = raw[:400]
-            raise
+        except json.JSONDecodeError:
+            # Some providers wrap JSON in prose or markdown fences despite
+            # response_format=json_object. Extract the first {...} block.
+            match = _JSON_BLOCK_RE.search(raw)
+            if match is None:
+                ctx["error"] = "json_extract_failed"
+                ctx["raw_preview"] = raw[:400]
+                raise
+            parsed = json.loads(match.group(0))
+            ctx["json_recovered"] = True
         summary = ResearchSummary.model_validate(parsed)
         ctx["summary_keys"] = list(parsed.keys())
 

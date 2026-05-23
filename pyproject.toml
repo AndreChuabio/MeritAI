@@ -6,6 +6,7 @@ dependencies = [
     "anthropic>=0.104.1",
     "arxiv>=4.0.0",
     "clickhouse-connect>=1.0.1",
+    "ddtrace>=4.8.7",
     "google-genai>=2.6.0",
     "openai>=2.38.0",
     "pydantic>=2.13.4",

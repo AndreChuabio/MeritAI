@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Generator, Iterable
+from typing import Any, Generator, Iterable
 
 from paperpilot import trace
 from paperpilot.arxiv_lookup import (
@@ -26,6 +26,12 @@ SECTIONS = ("abstract", "intro", "related", "method")
 
 
 CITATION_RE = re.compile(r"\[arxiv:([^\]]+)\]")
+_VERSION_SUFFIX_RE = re.compile(r"v\d+$")
+
+
+def _norm_arxiv_id(aid: str) -> str:
+    """Strip trailing version suffix and whitespace; lowercase for comparison."""
+    return _VERSION_SUFFIX_RE.sub("", aid.strip().lower())
 
 
 @dataclass
@@ -77,11 +83,11 @@ def _section_prompt(
             for c in cand_list
         )
         sys = (
-            "You write related-work sections for ML/CS papers. STRICT RULES:\n"
-            "1. You may ONLY cite papers from the approved candidate list below.\n"
-            "2. Use inline markers like [arxiv:2401.12345] -- nothing else counts.\n"
-            "3. Cite at least 4 candidates; do not invent IDs.\n"
-            "4. Group citations by theme. ~300 words. Match the venue's tone."
+            "You write related-work sections for ML/CS papers. Cite work using "
+            "inline markers like [arxiv:2401.12345]. Cite ONLY papers from the "
+            "approved candidate list provided in the user message -- never invent "
+            "arxiv IDs. Cite at least 4 distinct candidates, group by theme, "
+            "~300 words. Match the venue's tone."
         )
         user = (
             common_user
@@ -104,12 +110,17 @@ def _section_prompt(
 
 
 def _strip_unapproved(text: str, approved_ids: set[str]) -> tuple[str, list[str]]:
-    """Remove any [arxiv:id] markers not in approved_ids; return cleaned text + dropped ids."""
+    """Remove any [arxiv:id] markers not in approved_ids; return cleaned text + dropped ids.
+
+    Comparison normalizes both sides (lowercase + strip vN suffix) so that
+    `2401.12345v2` matches an approved `2401.12345`.
+    """
+    approved_norm = {_norm_arxiv_id(a) for a in approved_ids}
     dropped: list[str] = []
 
     def sub(match: re.Match[str]) -> str:
         aid = match.group(1).strip()
-        if aid in approved_ids:
+        if _norm_arxiv_id(aid) in approved_norm:
             return f"[arxiv:{aid}]"
         dropped.append(aid)
         return ""
@@ -136,11 +147,27 @@ def draft_section(
         candidate_count=len(candidates) if candidates else 0,
     ) as ctx:
         client = get_client()
+        # Cache the user prompt for Anthropic so repeated section calls reuse
+        # the shared `common_user` block (Vercel AI Gateway honors the
+        # OpenAI-compat extra_body cache_control passthrough for Anthropic).
+        is_anthropic = model.startswith("anthropic/")
+        user_message: dict[str, Any] = {"role": "user", "content": user_prompt}
+        if is_anthropic:
+            user_message = {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": user_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            }
         stream = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt},
+                user_message,
             ],
             stream=True,
             max_tokens=900,
@@ -160,8 +187,12 @@ def draft_section(
     if section == "related" and candidates is not None:
         approved = {c.id for c in candidates}
         full_text, stripped = _strip_unapproved(full_text, approved)
+        # After strip, every remaining citation is an approved candidate
+        # already loaded in arxiv_lookup._CACHE -- avoid a flaky external
+        # arxiv API call by going straight to the cache when possible.
+        candidate_by_norm = {_norm_arxiv_id(c.id): c for c in candidates}
         for aid in set(CITATION_RE.findall(full_text)):
-            meta = lookup_paper(aid)
+            meta = candidate_by_norm.get(_norm_arxiv_id(aid)) or lookup_paper(aid)
             if meta is not None:
                 citations.append(meta)
 
