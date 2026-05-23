@@ -43,3 +43,7 @@ submission/*.out
 
 # Claude / harness
 .claude/settings.local.json
+
+# Local rollback safety nets (kept in working tree, never committed)
+*.demo-backup
+*.concern-backup

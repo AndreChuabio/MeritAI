@@ -36,6 +36,16 @@ st.caption(
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = trace.new_session()
+    # Best-effort: ensure the new session_artifacts table exists. Old
+    # ClickHouse deployments that were seeded before this feature shipped
+    # will gain the table at first app start. Never crash the UI on failure.
+    if os.environ.get("CLICKHOUSE_HOST"):
+        try:
+            from paperpilot.clickhouse_client import init_schema
+
+            init_schema()
+        except Exception:  # noqa: BLE001
+            pass
 if "bundle" not in st.session_state:
     st.session_state.bundle = None
 if "summary" not in st.session_state:
@@ -48,6 +58,8 @@ if "sections" not in st.session_state:
     st.session_state.sections = {}
 if "skill_pack" not in st.session_state:
     st.session_state.skill_pack = None
+if "saved_artifacts" not in st.session_state:
+    st.session_state.saved_artifacts = set()  # set of (kind, content_hash)
 
 session_id = st.session_state.session_id
 
@@ -59,7 +71,7 @@ def _env_summary() -> dict[str, str]:
         "DeepMind / Gemini 1M": gw,
         "ClickHouse Cloud": "configured" if os.environ.get("CLICKHOUSE_HOST") else "missing",
         "Datadog Lapdog forward": "enabled" if os.environ.get("DD_API_KEY") else "off",
-        "Nimble web data": "cached",
+        "Nimble web data": "live" if os.environ.get("NIMBLE_API_KEY") else "off",
     }
 
 
@@ -69,6 +81,8 @@ _STAGE_COLOR = {
     "citation": "#f59e0b", # amber
     "draft": "#8b5cf6",    # purple
     "skill": "#06b6d4",    # cyan (skill extraction)
+    "nimble": "#fb923c",   # orange (Nimble web data)
+    "artifact": "#84cc16", # lime (persisted artifact)
     "llm": "#94a3b8",      # slate (hello-world ping)
     "demo": "#ec4899",     # pink
 }
@@ -131,9 +145,70 @@ with right:
                     st.json(evt.payload, expanded=False)
 
     st.divider()
+    st.markdown("**Past sessions**")
+    st.caption("Every paper + plugin generated lands in `session_artifacts`.")
+    try:
+        from paperpilot.clickhouse_client import (
+            fetch_artifact_content,
+            fetch_artifacts,
+        )
+
+        past = fetch_artifacts(limit=15)
+    except Exception as exc:  # noqa: BLE001 -- right rail must never crash
+        past = []
+        st.caption(f"`session_artifacts` unavailable: {exc}")
+    if not past:
+        st.caption("(none yet -- generate a paper or plugin to populate)")
+    else:
+        _KIND_ICON = {
+            "paper_tex": "TEX",
+            "paper_bib": "BIB",
+            "plugin_zip": "ZIP",
+            "summary_json": "SUM",
+        }
+        for row in past[:10]:
+            label = _KIND_ICON.get(row["artifact_kind"], row["artifact_kind"][:3].upper())
+            sid_short = row["session_id"][-6:]
+            tag = row["repo"] or row["artifact_name"]
+            size_kb = max(1, row["size_bytes"] // 1024)
+            with st.container(border=True):
+                st.markdown(
+                    f"`{label}` **{row['artifact_name']}**  \n"
+                    f"<small>{tag} · {size_kb} KB · sess `{sid_short}`</small>",
+                    unsafe_allow_html=True,
+                )
+                # On-demand re-download for any artifact in this session.
+                if row["session_id"] == session_id:
+                    dl_key = f"redl_{row['content_hash'][:10]}_{row['artifact_kind']}"
+                    if st.button("Re-download", key=dl_key, use_container_width=True):
+                        try:
+                            content = fetch_artifact_content(
+                                row["session_id"], row["artifact_name"]
+                            )
+                            if content is None:
+                                st.error("Not found.")
+                            else:
+                                meta = row.get("metadata") or {}
+                                if meta.get("encoding") == "base64":
+                                    import base64 as _b64
+
+                                    data = _b64.b64decode(content)
+                                else:
+                                    data = content.encode("utf-8")
+                                st.download_button(
+                                    "Save file",
+                                    data=data,
+                                    file_name=row["artifact_name"],
+                                    key=f"save_{dl_key}",
+                                    use_container_width=True,
+                                )
+                        except Exception as exc:  # noqa: BLE001
+                            st.error(f"Fetch failed: {exc}")
+
+    st.divider()
     st.markdown("**Sponsor wires**")
     for label, status in _env_summary().items():
-        icon = "🟢" if status in {"configured", "enabled", "on", "cached"} else "⚪"
+        icon = "🟢" if status in {"configured", "enabled", "on", "live", "cached"} else "⚪"
         st.write(f"{icon} {label}: `{status}`")
     st.caption("Lapdog dashboard: https://lapdog.datadoghq.com (reads from local :8126)")
 
@@ -363,87 +438,269 @@ with left:
                             st.session_state.chosen_venue = venue
                             st.session_state.sections = {}
 
-        # Skill extraction: turn the same repo bundle into publishable
-        # Claude Skills + MCP build prompts. Reuses the already-fetched
-        # bundle so there's no second GitHub round-trip.
+            # Nimble live web check for the top venue. Guarded behind an
+            # explicit button so judges trigger it on demand -- the venue
+            # match itself stays sub-second.
+            if st.session_state.chosen_venue is not None:
+                from paperpilot import nimble_client
+
+                if nimble_client.is_configured():
+                    with st.expander(
+                        f"Live web check (Nimble) for {st.session_state.chosen_venue.name}"
+                    ):
+                        if st.button(
+                            "Verify deadline + scope from the live CFP site",
+                            key=f"nimble_check_{st.session_state.chosen_venue.id}",
+                            use_container_width=True,
+                        ):
+                            v = st.session_state.chosen_venue
+                            with st.spinner("Nimble Search + Extract..."):
+                                hits = nimble_client.search(
+                                    f"{v.name} {v.deadline.year} submission deadline",
+                                    session_id,
+                                    k=4,
+                                )
+                                if hits:
+                                    st.markdown("**Top web results (Search):**")
+                                    for h in hits:
+                                        st.markdown(
+                                            f"- [{h.title or h.url}]({h.url})"
+                                        )
+                                        if h.snippet:
+                                            st.caption(h.snippet[:200])
+                                else:
+                                    st.info("No live search results returned.")
+
+                                if v.url:
+                                    ext = nimble_client.extract(
+                                        v.url, session_id
+                                    )
+                                    if ext and ext.get("data"):
+                                        st.markdown("**Live page (Extract):**")
+                                        page_data = ext["data"]
+                                        # Generic extract returns body text;
+                                        # show a digestible snippet.
+                                        if isinstance(page_data, dict):
+                                            body = (
+                                                page_data.get("text")
+                                                or page_data.get("body")
+                                                or json.dumps(page_data, indent=2)[:1200]
+                                            )
+                                        else:
+                                            body = str(page_data)[:1200]
+                                        st.code(body[:1500], language="text")
+                                        st.caption(
+                                            f"status={ext.get('status')} "
+                                            f"code={ext.get('status_code')}"
+                                        )
+                                    else:
+                                        st.caption(
+                                            "Extract returned no parseable data."
+                                        )
+                else:
+                    st.caption(
+                        "Set `NIMBLE_API_KEY` to enable the live web check for venues."
+                    )
+
+        # Plugin extraction: turn the same repo bundle into a full
+        # Claude Code plugin (skills, commands, agents, hooks, MCP build
+        # prompts). Reuses the already-fetched bundle -- no second
+        # GitHub round-trip.
         if st.session_state.bundle is not None:
-            st.subheader("Extract reusable skills")
+            st.subheader("Extract Claude plugin from repo")
             st.caption(
-                "Find pieces of this repo that could be lifted out as a "
-                "Claude Skill or MCP server. Downloads as a zip of SKILL.md "
-                "files + ready-to-paste MCP build prompts."
+                "One LLM pass identifies skills, slash commands, subagents, "
+                "lifecycle hooks, and MCP server opportunities. Downloads as "
+                "a drop-in `~/.claude/plugins/<name>/` zip."
             )
             extract_clicked = st.button(
-                "Extract skills from repo",
-                key="extract_skills_btn",
+                "Extract plugin",
+                key="extract_plugin_btn",
                 use_container_width=True,
             )
             if extract_clicked:
-                from paperpilot.skill_extract import extract_skills
+                from paperpilot.skill_extract import extract_plugin
 
-                with st.status("Analyzing repo for extractable skills...", expanded=True) as status:
+                with st.status(
+                    "Analyzing repo for plugin opportunities...", expanded=True
+                ) as status:
                     try:
-                        pack = extract_skills(st.session_state.bundle, session_id)
+                        pack = extract_plugin(st.session_state.bundle, session_id)
                         st.session_state.skill_pack = pack
-                        if not pack.skills:
+                        if pack.total_artifacts == 0:
                             status.update(
-                                label="No extractable skills found in this repo",
+                                label="No plugin artifacts found in this repo",
                                 state="error",
                             )
                         else:
                             status.update(
-                                label=f"Found {len(pack.skills)} extractable skill(s)",
+                                label=(
+                                    f"Built plugin `{pack.plugin_name}` with "
+                                    f"{pack.total_artifacts} artifact(s)"
+                                ),
                                 state="complete",
                             )
                     except Exception as exc:  # noqa: BLE001
                         status.update(label=f"Failed: {exc}", state="error")
                         st.exception(exc)
 
-            if st.session_state.skill_pack and st.session_state.skill_pack.skills:
-                from paperpilot.skill_render import build_skill_pack_zip
+            if (
+                st.session_state.skill_pack
+                and st.session_state.skill_pack.total_artifacts > 0
+            ):
+                from paperpilot.skill_render import build_plugin_zip
 
                 pack = st.session_state.skill_pack
                 source_repo = (
-                    f"{st.session_state.bundle.owner}/{st.session_state.bundle.name}"
+                    f"{st.session_state.bundle.owner}/"
+                    f"{st.session_state.bundle.name}"
                 )
 
-                # Card grid
-                ncols = min(len(pack.skills), 2)
-                skill_cols = st.columns(ncols)
-                for i, skill in enumerate(pack.skills):
-                    with skill_cols[i % ncols]:
-                        with st.container(border=True):
-                            kind_badge = {
-                                "claude_skill": "Claude Skill",
-                                "mcp_tool": "MCP Tool",
-                                "both": "Skill + MCP",
-                            }.get(skill.kind, skill.kind)
-                            st.markdown(f"**{skill.name}**")
-                            st.caption(f"{kind_badge} · effort: {skill.effort}")
-                            st.write(skill.description)
-                            with st.expander("Why extract it"):
-                                st.write(skill.rationale)
-                                if skill.source_files:
-                                    st.markdown("**Source files:**")
-                                    for p in skill.source_files:
-                                        st.code(p, language="text")
-                                if skill.suggested_tool_signatures:
-                                    st.markdown("**Suggested tools:**")
-                                    for sig in skill.suggested_tool_signatures:
-                                        st.code(
-                                            f"{sig.name}{sig.args}",
-                                            language="python",
-                                        )
-                                        st.caption(sig.summary)
+                # Top-line metrics: one per artifact category.
+                m_cols = st.columns(5)
+                m_cols[0].metric("Skills", len(pack.skills))
+                m_cols[1].metric("Commands", len(pack.commands))
+                m_cols[2].metric("Agents", len(pack.agents))
+                m_cols[3].metric("Hooks", len(pack.hooks))
+                m_cols[4].metric("MCPs", len(pack.mcps))
 
-                zip_bytes = build_skill_pack_zip(pack, source_repo)
+                st.markdown(f"**Plugin:** `{pack.plugin_name}`")
+                if pack.plugin_description:
+                    st.write(pack.plugin_description)
+
+                # Nimble Answers: prior-art check. Helps the user gut-check
+                # whether the suggested plugin overlaps with anything that
+                # already exists in the Claude / MCP ecosystem.
+                from paperpilot import nimble_client as _nimble
+
+                if _nimble.is_configured():
+                    if st.button(
+                        "Check prior art via Nimble Answers",
+                        key="nimble_prior_art_btn",
+                        use_container_width=True,
+                    ):
+                        q = (
+                            f"Are there existing Claude Code plugins or MCP servers "
+                            f"that already do this: {pack.plugin_description or pack.plugin_name}? "
+                            f"Cite specific projects with URLs."
+                        )
+                        with st.spinner("Nimble Answers (web-cited synthesis)..."):
+                            ans = _nimble.answers(q, session_id, depth="lite")
+                        if ans and ans.get("answer"):
+                            st.markdown("**Prior art (Nimble Answers):**")
+                            st.write(ans["answer"])
+                            if ans.get("citations"):
+                                st.caption("Citations:")
+                                for c in ans["citations"]:
+                                    st.markdown(
+                                        f"- [{c.get('title') or c.get('url')}]"
+                                        f"({c.get('url')})"
+                                    )
+                        else:
+                            st.info("No synthesized answer returned.")
+
+                # Per-category expanders so the demo can drill into any group.
+                if pack.skills:
+                    with st.expander(f"Skills ({len(pack.skills)})", expanded=True):
+                        for s in pack.skills:
+                            st.markdown(f"**{s.name}** — effort: `{s.effort}`")
+                            st.write(s.description)
+                            if s.rationale:
+                                st.caption(s.rationale)
+                            if s.source_files:
+                                st.caption("Source: " + ", ".join(f"`{p}`" for p in s.source_files))
+                            st.divider()
+
+                if pack.commands:
+                    with st.expander(f"Slash commands ({len(pack.commands)})"):
+                        for c in pack.commands:
+                            st.markdown(f"`/{c.name}` — {c.description}")
+                            if c.argument_hint:
+                                st.caption(f"argument-hint: `{c.argument_hint}`")
+                            with st.popover("Preview body"):
+                                st.code(c.body, language="markdown")
+
+                if pack.agents:
+                    with st.expander(f"Subagents ({len(pack.agents)})"):
+                        for a in pack.agents:
+                            st.markdown(f"**{a.name}** — {a.description}")
+                            if a.tools:
+                                st.caption(f"tools: {', '.join(a.tools)}")
+                            with st.popover("Preview system prompt"):
+                                st.write(a.system_prompt)
+
+                if pack.hooks:
+                    with st.expander(f"Hooks ({len(pack.hooks)})"):
+                        for h in pack.hooks:
+                            st.markdown(
+                                f"**{h.event}** / `{h.name}` "
+                                f"{('· matcher=`' + h.matcher + '`') if h.matcher else ''}"
+                            )
+                            st.write(h.description)
+                            with st.popover("Preview shell script"):
+                                st.code(h.shell_script, language="bash")
+                            st.divider()
+
+                if pack.mcps:
+                    with st.expander(f"MCP server build prompts ({len(pack.mcps)})"):
+                        for m in pack.mcps:
+                            st.markdown(f"**{m.name}** — {m.description}")
+                            if m.rationale:
+                                st.caption(m.rationale)
+                            if m.suggested_tools:
+                                st.markdown("**Suggested tools:**")
+                                for sig in m.suggested_tools:
+                                    st.code(
+                                        f"{sig.name}{sig.args}",
+                                        language="python",
+                                    )
+                                    st.caption(sig.summary)
+                            if m.dependencies:
+                                st.caption("deps: " + ", ".join(m.dependencies))
+                            st.divider()
+
+                zip_bytes = build_plugin_zip(pack, source_repo)
+
+                # Persist the zip to ClickHouse (base64 to keep it in a
+                # String column). Guard against double-save on rerun via
+                # (kind, hash) key. Best-effort.
+                import base64 as _b64
+                import hashlib as _hash
+                from paperpilot.pipeline import save_artifact
+
+                zip_b64 = _b64.b64encode(zip_bytes).decode("ascii")
+                zip_hash = _hash.sha256(zip_bytes).hexdigest()
+                save_key = ("plugin_zip", zip_hash)
+                if save_key not in st.session_state.saved_artifacts:
+                    save_artifact(
+                        session_id=session_id,
+                        artifact_kind="plugin_zip",
+                        artifact_name=f"{pack.plugin_name}.zip",
+                        content=zip_b64,
+                        repo=source_repo,
+                        venue="",
+                        metadata={
+                            "encoding": "base64",
+                            "plugin_name": pack.plugin_name,
+                            "total_artifacts": pack.total_artifacts,
+                            "counts": {
+                                "skills": len(pack.skills),
+                                "commands": len(pack.commands),
+                                "agents": len(pack.agents),
+                                "hooks": len(pack.hooks),
+                                "mcps": len(pack.mcps),
+                            },
+                        },
+                    )
+                    st.session_state.saved_artifacts.add(save_key)
+
                 st.download_button(
-                    "Download skill pack (.zip)",
+                    "Download Claude plugin (.zip)",
                     data=zip_bytes,
-                    file_name=f"{st.session_state.bundle.name}_skills.zip",
+                    file_name=f"{pack.plugin_name}.zip",
                     mime="application/zip",
                     use_container_width=True,
-                    key="skill_pack_download",
+                    key="plugin_zip_download",
                 )
 
         # Draft the paper
@@ -481,6 +738,42 @@ with left:
                     st.session_state.chosen_venue,
                     st.session_state.sections,
                 )
+
+                # Persist tex + bib to ClickHouse, tagged to session. Guard
+                # against double-save on Streamlit rerun via (kind, hash) key.
+                import hashlib as _hash
+                from paperpilot.pipeline import save_artifact
+
+                venue_name = st.session_state.chosen_venue.name
+                bundle = st.session_state.bundle
+                repo_str = f"{bundle.owner}/{bundle.name}" if bundle else ""
+
+                tex_hash = _hash.sha256(tex.encode("utf-8")).hexdigest()
+                tex_key = ("paper_tex", tex_hash)
+                if tex_key not in st.session_state.saved_artifacts:
+                    save_artifact(
+                        session_id=session_id,
+                        artifact_kind="paper_tex",
+                        artifact_name="paperpilot.tex",
+                        content=tex,
+                        repo=repo_str,
+                        venue=venue_name,
+                    )
+                    st.session_state.saved_artifacts.add(tex_key)
+
+                bib_hash = _hash.sha256(bib.encode("utf-8")).hexdigest()
+                bib_key = ("paper_bib", bib_hash)
+                if bib_key not in st.session_state.saved_artifacts:
+                    save_artifact(
+                        session_id=session_id,
+                        artifact_kind="paper_bib",
+                        artifact_name="references.bib",
+                        content=bib,
+                        repo=repo_str,
+                        venue=venue_name,
+                    )
+                    st.session_state.saved_artifacts.add(bib_key)
+
                 ex_col1, ex_col2 = st.columns(2)
                 with ex_col1:
                     st.download_button(

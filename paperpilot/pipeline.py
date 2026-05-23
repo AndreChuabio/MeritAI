@@ -10,17 +10,77 @@ this orchestrator is also used by:
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
 from paperpilot import trace
 from paperpilot.cfp_match import VenueMatch, rank_venues
+from paperpilot.clickhouse_client import insert_artifact
 from paperpilot.draft import DraftSection, draft_paper
 from paperpilot.github_ingest import RepoBundle, fetch_repo
 from paperpilot.latex_export import export_paper
 from paperpilot.llm_ingest import ResearchSummary, summarize_repo
+
+
+_log = logging.getLogger(__name__)
+
+
+def _clickhouse_configured() -> bool:
+    return bool(os.environ.get("CLICKHOUSE_HOST"))
+
+
+def save_artifact(
+    session_id: str,
+    artifact_kind: str,
+    artifact_name: str,
+    content: str,
+    repo: str = "",
+    venue: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> str | None:
+    """Best-effort: persist a generated artifact to ClickHouse + trace_log.
+
+    Returns the sha256 content_hash on success, None on failure. Never raises.
+    The trace_log entry is the demo-visible breadcrumb; the artifact row is
+    the durable blob behind the "Past sessions" sidebar.
+    """
+    h = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    payload = {
+        "kind": artifact_kind,
+        "name": artifact_name,
+        "size_bytes": len(content.encode("utf-8")),
+        "content_hash": h,
+        "repo": repo,
+        "venue": venue,
+        **(metadata or {}),
+    }
+    trace.log_event(session_id, f"artifact.{artifact_kind}.saved", payload)
+    if not _clickhouse_configured():
+        return h
+    try:
+        insert_artifact(
+            session_id=session_id,
+            artifact_kind=artifact_kind,
+            artifact_name=artifact_name,
+            content=content,
+            repo=repo,
+            venue=venue,
+            metadata=metadata,
+            content_hash=h,
+        )
+    except Exception as exc:  # noqa: BLE001 -- demo path; never fail the user
+        _log.warning("session_artifacts insert failed: %s", exc)
+        trace.log_event(
+            session_id,
+            f"artifact.{artifact_kind}.save_failed",
+            {"error": str(exc), "name": artifact_name},
+        )
+    return h
 
 
 DEMO_CACHE = Path(__file__).resolve().parent.parent / "data" / "demo_cache.json"

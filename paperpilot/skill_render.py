@@ -1,12 +1,22 @@
-"""Pure-function rendering of ExtractableSkill -> publishable artifacts.
+"""Render a PluginPack into a real Claude Code plugin directory zip.
 
-Two artifacts per skill:
-  1. SKILL.md -- frontmatter + body, ready to drop into ~/.claude/skills/<name>/
-     and be discovered by Claude Code / claude.ai.
-  2. mcp_build_prompt.md -- a prompt the user hands to Claude Code in a new
-     session that says "build me an MCP server exposing this skill as tools."
-     Includes source file references, suggested tool signatures, and enough
-     context for the agent to do the build autonomously.
+Output layout matches the Claude Code plugin discovery convention:
+
+  <plugin_name>/
+    plugin.json                         # manifest
+    README.md                           # human-readable overview
+    skills/
+      <skill_name>/SKILL.md             # frontmatter + body
+    commands/
+      <command_name>.md                 # slash command body
+    agents/
+      <agent_name>.md                   # frontmatter + system prompt
+    hooks/
+      hooks.json                        # hook config Claude Code reads
+      <hook_name>.sh                    # the actual shell script(s)
+    mcps/
+      <mcp_name>/build_prompt.md        # not auto-installable; prompt to scaffold
+      <mcp_name>/README.md
 
 No LLM calls. Pure templating.
 """
@@ -14,31 +24,43 @@ No LLM calls. Pure templating.
 from __future__ import annotations
 
 import io
+import json
 import re
 import zipfile
 
-from paperpilot.skill_extract import ExtractableSkill, SkillPack
+from paperpilot.skill_extract import (
+    AgentSpec,
+    CommandSpec,
+    HookSpec,
+    MCPSpec,
+    PluginPack,
+    SkillSpec,
+)
 
 
-_SAFE_NAME_RE = re.compile(r"[^a-z0-9_]+")
+_KEBAB_RE = re.compile(r"[^a-z0-9-]+")
+_SNAKE_RE = re.compile(r"[^a-z0-9_]+")
 
 
-def _safe_name(name: str) -> str:
-    """Coerce arbitrary text into a directory-safe snake_case identifier."""
+def _safe_kebab(name: str) -> str:
+    s = name.strip().lower().replace("_", "-").replace(" ", "-")
+    s = _KEBAB_RE.sub("", s)
+    return s.strip("-") or "unnamed"
+
+
+def _safe_snake(name: str) -> str:
     s = name.strip().lower().replace("-", "_").replace(" ", "_")
-    s = _SAFE_NAME_RE.sub("", s)
-    return s or "unnamed_skill"
+    s = _SNAKE_RE.sub("", s)
+    return s or "unnamed"
 
 
-def render_skill_md(skill: ExtractableSkill, source_repo: str) -> str:
-    """Render a Claude SKILL.md with frontmatter and body."""
+def render_skill_md(skill: SkillSpec, source_repo: str) -> str:
     desc = skill.description.replace("\n", " ").strip()
-    body_lines = [
+    lines = [
         "---",
-        f"name: {_safe_name(skill.name)}",
+        f"name: {_safe_snake(skill.name)}",
         f"description: {desc}",
         "metadata:",
-        f"  kind: {skill.kind}",
         f"  effort: {skill.effort}",
         f"  source_repo: {source_repo}",
         "---",
@@ -53,82 +75,84 @@ def render_skill_md(skill: ExtractableSkill, source_repo: str) -> str:
         "",
         "## Why extract it",
         "",
-        skill.rationale.strip(),
+        skill.rationale.strip() or "(no rationale provided)",
         "",
     ]
-
     if skill.source_files:
-        body_lines += [
-            "## Source files in the original repo",
-            "",
-            *(f"- `{p}`" for p in skill.source_files),
-            "",
-        ]
-
+        lines += ["## Source files in the original repo", ""]
+        lines += [f"- `{p}`" for p in skill.source_files]
+        lines += [""]
     if skill.key_functions:
-        body_lines += [
-            "## Key functions / classes",
-            "",
-            *(f"- `{fn}`" for fn in skill.key_functions),
-            "",
-        ]
-
-    if skill.suggested_tool_signatures:
-        body_lines += ["## Suggested tool signatures", ""]
-        for sig in skill.suggested_tool_signatures:
-            body_lines.append(f"- `{sig.name}{sig.args}` -- {sig.summary}")
-        body_lines.append("")
-
-    if skill.dependencies:
-        body_lines += [
-            "## Dependencies",
-            "",
-            *(f"- `{d}`" for d in skill.dependencies),
-            "",
-        ]
-
+        lines += ["## Key functions / classes", ""]
+        lines += [f"- `{fn}`" for fn in skill.key_functions]
+        lines += [""]
     if skill.usage_example:
-        body_lines += [
-            "## Usage example",
-            "",
-            "```",
-            skill.usage_example.strip(),
-            "```",
-            "",
-        ]
+        lines += ["## Usage example", "", "```", skill.usage_example.strip(), "```", ""]
+    return "\n".join(lines)
 
-    body_lines += [
-        "## When to invoke",
-        "",
-        f"Use this skill when {skill.description.strip().rstrip('.')} -- "
-        f"effort to integrate is **{skill.effort}**.",
-        "",
+
+def render_command_md(cmd: CommandSpec) -> str:
+    fm = ["---", f"description: {cmd.description.strip()}"]
+    if cmd.argument_hint:
+        fm.append(f"argument-hint: {cmd.argument_hint}")
+    fm += ["---", ""]
+    return "\n".join(fm) + cmd.body.strip() + "\n"
+
+
+def render_agent_md(agent: AgentSpec) -> str:
+    fm = [
+        "---",
+        f"name: {_safe_kebab(agent.name)}",
+        f"description: {agent.description.strip()}",
     ]
-    return "\n".join(body_lines)
+    if agent.tools:
+        fm.append(f"tools: {', '.join(agent.tools)}")
+    fm += ["---", ""]
+    return "\n".join(fm) + agent.system_prompt.strip() + "\n"
 
 
-def render_mcp_build_prompt(skill: ExtractableSkill, source_repo: str) -> str:
-    """Render a prompt the user can paste into Claude Code to scaffold an MCP server."""
-    safe = _safe_name(skill.name)
-    deps = ", ".join(skill.dependencies) if skill.dependencies else "(infer from source)"
-    files = "\n".join(f"  - {p}" for p in skill.source_files) or "  (none listed -- inspect the repo)"
+def render_hooks_json(hooks: list[HookSpec]) -> str:
+    """Build the hooks.json config Claude Code reads at plugin load."""
+    grouped: dict[str, list[dict]] = {}
+    for h in hooks:
+        entry = {
+            "type": "command",
+            "command": f"${{CLAUDE_PLUGIN_ROOT}}/hooks/{_safe_snake(h.name)}.sh",
+        }
+        bucket = {
+            "matcher": h.matcher or "*",
+            "hooks": [entry],
+        }
+        grouped.setdefault(h.event, []).append(bucket)
+    return json.dumps({"hooks": grouped}, indent=2)
+
+
+def render_hook_script(hook: HookSpec) -> str:
+    script = hook.shell_script.strip()
+    if not script.startswith("#!"):
+        script = "#!/bin/bash\n" + script
+    return script + "\n"
+
+
+def render_mcp_build_prompt(mcp: MCPSpec, source_repo: str) -> str:
+    deps = ", ".join(mcp.dependencies) if mcp.dependencies else "(infer from source)"
+    files = "\n".join(f"  - {p}" for p in mcp.source_files) or "  (inspect the source repo)"
     sigs = "\n".join(
-        f"  - `{s.name}{s.args}` -- {s.summary}"
-        for s in skill.suggested_tool_signatures
+        f"  - `{s.name}{s.args}` -- {s.summary}" for s in mcp.suggested_tools
     ) or "  (design your own based on the rationale below)"
-
-    return f"""# MCP server build task: {skill.name}
+    safe = _safe_snake(mcp.name)
+    return f"""# MCP server build task: {mcp.name}
 
 You are building a Python MCP server that exposes this skill as one or more tools.
 
 ## Source repository
 {source_repo}
 
-## What this skill does
-{skill.description}
+## What this server does
+{mcp.description}
 
 ## Why this is worth wrapping
-{skill.rationale}
+{mcp.rationale}
 
 ## Source files to read first
 {files}
@@ -147,70 +171,133 @@ You are building a Python MCP server that exposes this skill as one or more tool
      pyproject.toml
      {safe}_mcp/
        __init__.py
-       server.py          # FastMCP server with the tool decorators
-       core.py            # The extracted logic from the source files above
+       server.py          # FastMCP server with tool decorators
+       core.py            # extracted logic from the source files above
      README.md
    ```
+2. Use the `mcp` Python SDK with `FastMCP`. Each tool above gets a `@mcp.tool()` decorator.
+3. Port the core logic from the source files into `core.py`. Strip framework-specific glue.
+4. In `server.py`, instantiate `FastMCP("{safe}")`, wrap each function with `@mcp.tool()`, and run via `mcp.run()`.
+5. README covers install, env vars, and Claude Desktop / Claude Code registration via `claude_desktop_config.json`.
+6. `pyproject.toml` needs `mcp[cli]>=1.0` plus the dependencies listed above.
 
-2. Use `mcp` Python SDK with `FastMCP`. Each tool above gets a `@mcp.tool()` decorator.
-
-3. Port the core logic from the source files listed above into `core.py`. Strip
-   any framework-specific glue (Streamlit, FastAPI, etc.); keep the pure function.
-
-4. In `server.py`, instantiate `FastMCP("{safe}")`, wrap each core function with
-   `@mcp.tool()`, and run via `mcp.run()` at module exec.
-
-5. Write a `README.md` covering: install, configure (any required env vars), and
-   how to register the server with Claude Desktop / Claude Code via
-   `claude_desktop_config.json`.
-
-6. Add `pyproject.toml` with `mcp[cli]>=1.0` plus the dependencies listed above.
-
-## Usage example from the original
-{skill.usage_example or '(none provided)'}
-
-## Effort estimate
-{skill.effort}
-
-When you finish, run the server locally with `python -m {safe}_mcp.server` and
-verify the tools are discoverable via `mcp dev`.
+When done, `python -m {safe}_mcp.server` should run; verify tools are discoverable via `mcp dev`.
 """
 
 
-def render_pack_readme(pack: SkillPack, source_repo: str) -> str:
-    """Top-level README for the downloaded zip explaining what's inside."""
+def render_plugin_manifest(pack: PluginPack, source_repo: str) -> str:
+    return json.dumps(
+        {
+            "name": _safe_kebab(pack.plugin_name),
+            "version": "0.1.0",
+            "description": pack.plugin_description,
+            "source_repo": source_repo,
+            "generated_by": "PaperPilot",
+            "contents": {
+                "skills": [_safe_snake(s.name) for s in pack.skills],
+                "commands": [_safe_kebab(c.name) for c in pack.commands],
+                "agents": [_safe_kebab(a.name) for a in pack.agents],
+                "hooks": [_safe_snake(h.name) for h in pack.hooks],
+                "mcps": [_safe_snake(m.name) for m in pack.mcps],
+            },
+        },
+        indent=2,
+    )
+
+
+def render_plugin_readme(pack: PluginPack, source_repo: str) -> str:
     lines = [
-        f"# Skill pack extracted from {source_repo}",
+        f"# {pack.plugin_name}",
         "",
-        f"Generated by PaperPilot. {len(pack.skills)} extractable skill(s) found.",
+        pack.plugin_description or "(no description)",
         "",
-        "## What's in here",
+        f"**Source repo:** {source_repo}",
+        "**Generated by:** PaperPilot",
         "",
-        "Each subdirectory is one skill. Inside each you'll find:",
-        "- `SKILL.md` -- drop into `~/.claude/skills/<name>/` to load as a Claude Skill",
-        "- `mcp_build_prompt.md` -- paste into Claude Code to scaffold an MCP server",
+        "## Install",
         "",
-        "## Skills",
+        "```bash",
+        "# Unzip, then move into your Claude plugins dir:",
+        f"mv {_safe_kebab(pack.plugin_name)} ~/.claude/plugins/",
+        "```",
+        "",
+        "Restart Claude Code; the plugin discovers automatically.",
+        "",
+        "## Contents",
         "",
     ]
-    for s in pack.skills:
-        lines.append(f"### `{_safe_name(s.name)}` ({s.kind}, effort: {s.effort})")
-        lines.append("")
-        lines.append(s.description)
-        lines.append("")
+    if pack.skills:
+        lines += ["### Skills", ""]
+        lines += [f"- **{s.name}** -- {s.description}" for s in pack.skills]
+        lines += [""]
+    if pack.commands:
+        lines += ["### Commands", ""]
+        lines += [f"- `/{_safe_kebab(c.name)}` -- {c.description}" for c in pack.commands]
+        lines += [""]
+    if pack.agents:
+        lines += ["### Subagents", ""]
+        lines += [f"- **{_safe_kebab(a.name)}** -- {a.description}" for a in pack.agents]
+        lines += [""]
+    if pack.hooks:
+        lines += ["### Hooks", ""]
+        lines += [f"- **{h.event}** / `{h.name}` -- {h.description}" for h in pack.hooks]
+        lines += [""]
+    if pack.mcps:
+        lines += ["### MCP servers (build prompts)", ""]
+        lines += [f"- **{m.name}** -- {m.description}" for m in pack.mcps]
+        lines += [""]
+    lines += [
+        "## What's *not* included",
+        "",
+        "MCP servers in `mcps/` are NOT auto-scaffolded. Each folder contains a",
+        "ready-to-paste prompt for Claude Code that scaffolds the server in a",
+        "fresh session. Open `mcps/<name>/build_prompt.md` and run it.",
+        "",
+    ]
     return "\n".join(lines)
 
 
-def build_skill_pack_zip(pack: SkillPack, source_repo: str) -> bytes:
-    """Bundle every skill's SKILL.md + mcp_build_prompt.md into one zip."""
+def build_plugin_zip(pack: PluginPack, source_repo: str) -> bytes:
+    """Bundle the full plugin layout into a single downloadable zip."""
     buf = io.BytesIO()
+    root = _safe_kebab(pack.plugin_name)
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("README.md", render_pack_readme(pack, source_repo))
+        zf.writestr(f"{root}/plugin.json", render_plugin_manifest(pack, source_repo))
+        zf.writestr(f"{root}/README.md", render_plugin_readme(pack, source_repo))
+
         for skill in pack.skills:
-            safe = _safe_name(skill.name)
-            zf.writestr(f"{safe}/SKILL.md", render_skill_md(skill, source_repo))
+            safe = _safe_snake(skill.name)
             zf.writestr(
-                f"{safe}/mcp_build_prompt.md",
-                render_mcp_build_prompt(skill, source_repo),
+                f"{root}/skills/{safe}/SKILL.md", render_skill_md(skill, source_repo)
+            )
+
+        for cmd in pack.commands:
+            safe = _safe_kebab(cmd.name)
+            zf.writestr(f"{root}/commands/{safe}.md", render_command_md(cmd))
+
+        for agent in pack.agents:
+            safe = _safe_kebab(agent.name)
+            zf.writestr(f"{root}/agents/{safe}.md", render_agent_md(agent))
+
+        if pack.hooks:
+            zf.writestr(f"{root}/hooks/hooks.json", render_hooks_json(pack.hooks))
+            for hook in pack.hooks:
+                safe = _safe_snake(hook.name)
+                info = zipfile.ZipInfo(f"{root}/hooks/{safe}.sh")
+                info.compress_type = zipfile.ZIP_DEFLATED
+                # Unix exec bit so users don't need chmod +x after unzipping.
+                info.external_attr = 0o755 << 16
+                zf.writestr(info, render_hook_script(hook))
+
+        for mcp in pack.mcps:
+            safe = _safe_snake(mcp.name)
+            zf.writestr(
+                f"{root}/mcps/{safe}/build_prompt.md",
+                render_mcp_build_prompt(mcp, source_repo),
+            )
+            zf.writestr(
+                f"{root}/mcps/{safe}/README.md",
+                f"# {mcp.name}\n\n{mcp.description}\n\n"
+                "See `build_prompt.md` and paste into Claude Code to scaffold.\n",
             )
     return buf.getvalue()

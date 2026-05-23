@@ -1,14 +1,14 @@
-"""Skill extraction: turn a GitHub repo into publishable Claude Skills + MCP build prompts.
+"""Claude Code plugin extraction.
 
 A single Gateway LLM call inspects the same `RepoBundle` we already fetched
-for paper summarization, and returns a structured list of reusable units --
-each one ready to be dropped into ~/.claude/skills/<name>/ as a SKILL.md, OR
-handed to Claude Code with a "build me an MCP server for this" prompt.
+for paper summarization, and returns a structured `PluginPack` describing a
+publishable Claude Code plugin: skills, slash commands, subagents, hooks,
+and MCP server suggestions.
 
-This sidesteps the hard problem of auto-generating a working MCP server
-scaffold (server.py + tool decorators + packaging) by instead generating a
-high-quality build prompt that lets the user finish in their own Claude
-Code session -- honest, low-risk, and matches the real ecosystem flow.
+The rendering layer (`skill_render.py`) turns the PluginPack into a real
+on-disk plugin layout (skills/, commands/, agents/, hooks/, plugin.json)
+zipped for download. Users drop the unzipped folder into
+`~/.claude/plugins/<name>/` and Claude Code picks it up.
 """
 
 from __future__ import annotations
@@ -27,77 +27,163 @@ from paperpilot.github_ingest import RepoBundle, render_bundle
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
-SYSTEM_PROMPT = """You are a senior engineer reviewing a GitHub repository to find reusable, publishable units of capability inside it.
+SYSTEM_PROMPT = """You are a senior engineer turning a GitHub repository into a publishable Claude Code plugin.
 
-You will receive a repository bundle (README + ranked source files). Identify between 2 and 5 distinct "extractable skills" -- self-contained pieces of functionality that could be lifted out and republished as either:
-  - A Claude Skill (a SKILL.md + supporting files, loaded into Claude Code or claude.ai)
-  - An MCP server tool (a function exposed to any MCP-aware LLM client)
-  - Or both.
+You will receive a repository bundle (README + ranked source files). Identify reusable units inside the repo and propose a Claude Code plugin that bundles them. A plugin can contain ANY of:
+
+- **skills**: SKILL.md files invoked when the user is doing a relevant task. Best for codified workflows or domain knowledge.
+- **commands**: slash commands the user explicitly invokes (like /review or /test). Best for discrete on-demand actions.
+- **agents**: subagents Claude can delegate to. Best for specialized roles (e.g. "data-pipeline-debugger").
+- **hooks**: shell scripts triggered on Claude Code lifecycle events (PreToolUse, PostToolUse, Stop, UserPromptSubmit, SessionStart). Best for guardrails, logging, or auto-formatting.
+- **mcps**: suggested MCP servers to expose the repo's capabilities as tools to any MCP-aware client.
+
+Be honest and specific. If the repo has only 1-2 extractable pieces, return only those -- DO NOT pad. If a category has nothing to offer, return an empty list for it.
 
 Look especially for:
-  - Agent loops, planners, or tool-calling glue
-  - Retrieval / search primitives (embedding search, ranking, filtering)
-  - Domain-specific extractors, parsers, or rankers
-  - Citation / fact-grounding / hallucination guards
-  - Workflow orchestrators (multi-step pipelines that take input X -> useful artifact Y)
-  - Data shapers (converters, normalizers, dedupers)
+- Agent loops, planners, tool-calling glue --> agents or commands
+- Retrieval / search primitives, embedding pipelines --> mcps (most reusable)
+- Domain-specific extractors, parsers, rankers --> skills or commands
+- Citation / fact-grounding / hallucination guards --> skills or hooks (PostToolUse)
+- Workflow orchestrators (multi-step pipelines) --> commands
+- Quality gates, validation steps --> hooks (PreToolUse or PostToolUse)
+- Data shapers, normalizers --> mcps
 
 Output a JSON object matching this schema EXACTLY:
 
 {
+  "plugin_name": "short-kebab-case-plugin-name",
+  "plugin_description": "One-sentence pitch: what the plugin gives a user.",
+  "source_files_overview": ["paths/that/were/key/to/this/analysis.py", ...],
   "skills": [
     {
-      "name": "short_snake_case_name",
-      "kind": "claude_skill" | "mcp_tool" | "both",
-      "description": "One sentence -- what this skill does, written so a future user knows when to invoke it.",
-      "rationale": "Why this is worth extracting: what makes it reusable, what problem it solves outside the original repo.",
+      "name": "snake_case_name",
+      "description": "One sentence describing what it does, written so a future user knows when to invoke it.",
+      "rationale": "Why this is worth extracting; what problem it solves outside the original repo.",
       "source_files": ["paths/relative/to/repo.py", ...],
-      "key_functions": ["function_or_class_names_that_implement_the_capability"],
-      "suggested_tool_signatures": [
+      "key_functions": ["function_or_class_names"],
+      "usage_example": "Prose or code snippet showing invocation.",
+      "effort": "small" | "medium" | "large"
+    }
+  ],
+  "commands": [
+    {
+      "name": "kebab-case-command-name",
+      "description": "What /command-name does (one sentence).",
+      "body": "Full markdown body of the command -- written as instructions to Claude on what to do when this command is invoked. Reference $ARGUMENTS if it takes args.",
+      "argument_hint": "<repo-url> or null"
+    }
+  ],
+  "agents": [
+    {
+      "name": "kebab-case-agent-name",
+      "description": "One sentence on the agent's specialty.",
+      "tools": ["Read", "Grep", "Bash"],
+      "system_prompt": "Multi-paragraph system prompt for the subagent. Should be specific and role-driven, not generic."
+    }
+  ],
+  "hooks": [
+    {
+      "event": "PreToolUse" | "PostToolUse" | "Stop" | "UserPromptSubmit" | "SessionStart",
+      "matcher": "Bash" | "Edit" | "Write" | "*" | null,
+      "name": "snake_case_hook_name",
+      "description": "One sentence on what this hook enforces or logs.",
+      "shell_script": "#!/bin/bash\\n# Full hook body. Reads JSON from stdin, exits non-zero to block.\\n..."
+    }
+  ],
+  "mcps": [
+    {
+      "name": "kebab-case-mcp-server-name",
+      "description": "One sentence on the MCP server's purpose.",
+      "rationale": "Why this is the right surface for these capabilities.",
+      "source_files": ["paths/relative/to/repo.py", ...],
+      "suggested_tools": [
         {"name": "tool_name", "args": "(arg1: type, arg2: type) -> ReturnType", "summary": "what it does"}
       ],
-      "dependencies": ["any-python-package-or-external-service-required"],
-      "effort": "small" | "medium" | "large",
-      "usage_example": "A short prose example or code snippet showing how a downstream user would invoke this skill."
+      "dependencies": ["python-package-or-service-required"]
     }
   ]
 }
 
-Rules:
-- Be HONEST. If the repo has no extractable skills (e.g. it's a toy script or just config), return {"skills": []}.
-- Prefer specificity over volume: 2 sharp skills beats 5 mushy ones.
-- `name` must be a valid Python identifier (snake_case, no spaces, no hyphens).
-- `source_files` must reference real paths from the bundle. Do not invent paths.
-- `effort` is your gut estimate of how long it would take a competent engineer to extract this cleanly: small=under 1hr, medium=half-day, large=multi-day.
+Hard rules:
+- All `name` fields must be valid identifiers (snake_case for skills/agents/hooks/mcps, kebab-case for commands/plugin_name).
+- `source_files` must reference real paths from the bundle. Do not invent.
+- Empty lists are OK for any category. Better to omit than to fabricate.
+- Hook `shell_script` must be syntactically valid bash. Reads from stdin (Claude Code passes hook input as JSON). Exit 0 to allow, non-zero to block (for PreToolUse).
+- A good plugin has between 1 and 8 total artifacts across all categories. Quality > quantity.
 
 Output ONLY valid JSON. No prose before or after."""
 
 
-class ToolSignature(BaseModel):
+class SkillSpec(BaseModel):
+    name: str
+    description: str
+    rationale: str = ""
+    source_files: list[str] = Field(default_factory=list)
+    key_functions: list[str] = Field(default_factory=list)
+    usage_example: str = ""
+    effort: str = "medium"
+
+
+class CommandSpec(BaseModel):
+    name: str
+    description: str
+    body: str
+    argument_hint: str | None = None
+
+
+class AgentSpec(BaseModel):
+    name: str
+    description: str
+    tools: list[str] = Field(default_factory=list)
+    system_prompt: str
+
+
+class HookSpec(BaseModel):
+    event: str
+    matcher: str | None = None
+    name: str
+    description: str
+    shell_script: str
+
+
+class MCPToolSig(BaseModel):
     name: str
     args: str = ""
     summary: str = ""
 
 
-class ExtractableSkill(BaseModel):
+class MCPSpec(BaseModel):
     name: str
-    kind: str  # "claude_skill" | "mcp_tool" | "both"
     description: str
-    rationale: str
+    rationale: str = ""
     source_files: list[str] = Field(default_factory=list)
-    key_functions: list[str] = Field(default_factory=list)
-    suggested_tool_signatures: list[ToolSignature] = Field(default_factory=list)
+    suggested_tools: list[MCPToolSig] = Field(default_factory=list)
     dependencies: list[str] = Field(default_factory=list)
-    effort: str = "medium"
-    usage_example: str = ""
 
 
-class SkillPack(BaseModel):
-    skills: list[ExtractableSkill] = Field(default_factory=list)
+class PluginPack(BaseModel):
+    plugin_name: str = "extracted-plugin"
+    plugin_description: str = ""
+    source_files_overview: list[str] = Field(default_factory=list)
+    skills: list[SkillSpec] = Field(default_factory=list)
+    commands: list[CommandSpec] = Field(default_factory=list)
+    agents: list[AgentSpec] = Field(default_factory=list)
+    hooks: list[HookSpec] = Field(default_factory=list)
+    mcps: list[MCPSpec] = Field(default_factory=list)
+
+    @property
+    def total_artifacts(self) -> int:
+        return (
+            len(self.skills)
+            + len(self.commands)
+            + len(self.agents)
+            + len(self.hooks)
+            + len(self.mcps)
+        )
 
 
-def extract_skills(bundle: RepoBundle, session_id: str) -> SkillPack:
-    """Single LLM call -> structured SkillPack. Traced through trace.step."""
+def extract_plugin(bundle: RepoBundle, session_id: str) -> PluginPack:
+    """Single LLM call -> structured PluginPack. Traced through trace.step."""
     rendered = render_bundle(bundle)
     model = DEFAULTS["ingest"]  # Reuse Gemini -- long context, cheap, good at structured extraction.
 
@@ -116,7 +202,7 @@ def extract_skills(bundle: RepoBundle, session_id: str) -> SkillPack:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": rendered},
             ],
-            max_tokens=8000,
+            max_tokens=12000,
             temperature=0.3,
         )
         raw = completion.choices[0].message.content or "{}"
@@ -144,8 +230,14 @@ def extract_skills(bundle: RepoBundle, session_id: str) -> SkillPack:
                 raise
             parsed = json.loads(match.group(0))
             ctx["json_recovered"] = True
-        pack = SkillPack.model_validate(parsed)
-        ctx["skill_count"] = len(pack.skills)
-        ctx["skill_names"] = [s.name for s in pack.skills]
+        pack = PluginPack.model_validate(parsed)
+        ctx["plugin_name"] = pack.plugin_name
+        ctx["counts"] = {
+            "skills": len(pack.skills),
+            "commands": len(pack.commands),
+            "agents": len(pack.agents),
+            "hooks": len(pack.hooks),
+            "mcps": len(pack.mcps),
+        }
 
     return pack
