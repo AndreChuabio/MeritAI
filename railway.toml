@@ -1,0 +1,36 @@
+# Railway deploy config for PaperPilot.
+#
+# Builder: Nixpacks auto-detects Python (we use uv for dependency install
+# via nixpacks.toml). Start command wraps Streamlit in `ddtrace-run` and
+# enables the Datadog LLM Observability agentless forward so production
+# traces ship to Datadog cloud without needing a local Lapdog agent.
+#
+# Required env vars (set via `railway variables set` or the dashboard):
+#   AI_GATEWAY_API_KEY        Vercel AI Gateway key
+#   CLICKHOUSE_HOST           ClickHouse Cloud host
+#   CLICKHOUSE_PORT           usually 8443
+#   CLICKHOUSE_USER           default
+#   CLICKHOUSE_PASSWORD       from Connect modal
+#   CLICKHOUSE_DATABASE       default
+#   CLICKHOUSE_SECURE         true
+#   DD_API_KEY                Datadog API key (LLM Obs forward)
+#   DD_SITE                   datadoghq.eu (or .com if US1)
+#   DD_LLMOBS_ENABLED         1
+#   DD_LLMOBS_ML_APP          paperpilot
+#   DD_LLMOBS_AGENTLESS_ENABLED  1   # required without a local Lapdog
+#   NIMBLE_API_KEY            web data live integrations
+#   SENSO_API_KEY             tone KB retrieval
+#   GITHUB_TOKEN              PAT for repo ingest (gh CLI not in container)
+#   MODEL_INGEST              optional override
+#   MODEL_DRAFT               optional override
+#   MODEL_EMBED               optional override
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "uv run ddtrace-run streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
+healthcheckPath = "/_stcore/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

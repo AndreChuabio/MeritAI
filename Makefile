@@ -59,6 +59,14 @@ push:
 	gh repo create AndreChuabio/agentichack --public --source=. --push \
 	  --description "Drop a GitHub repo. Get a research paper draft. Built at NYC Agentic Engineering Hack 2026 at Datadog HQ."
 
+# Push .env values into the linked Railway service. Run after `railway link`.
+railway-env:
+	bash scripts/railway_env_setup.sh
+
+# Deploy to Railway. Requires `railway login` + `railway link` first.
+railway-deploy:
+	railway up --detach
+
 # Tidy local caches.
 clean:
 	rm -rf __pycache__ paperpilot/__pycache__ scripts/__pycache__ .pytest_cache

@@ -1,0 +1,15 @@
+# Nixpacks build plan for Railway. Uses uv (faster than pip) and pins
+# Python 3.11 since some of our deps require >=3.11.
+
+[phases.setup]
+nixPkgs = ["python311", "uv"]
+aptPkgs = []
+
+[phases.install]
+cmds = [
+  "uv sync --frozen --no-dev",
+]
+
+[start]
+# Railway calls this; railway.toml startCommand overrides if both are set.
+cmd = "uv run ddtrace-run streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
