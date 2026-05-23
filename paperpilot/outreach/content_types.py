@@ -16,21 +16,33 @@ CONTENT_TYPE_CONFIGS: dict[str, dict] = {
             "deliver one concrete insight, end with a single question to the "
             "reader. No emojis. No hashtags."
         ),
-        "writing_rules": "Under 1300 chars. Plain text. No links inline.",
+        "writing_rules": [
+            "Under 1300 characters.",
+            "Plain text only.",
+            "No inline links.",
+        ],
     },
     "linkedin_dm_career": {
         "template": (
             "A short LinkedIn direct message, under 600 chars. Warm intro "
             "tone, reference one shared interest, end with one explicit ask."
         ),
-        "writing_rules": "Address by first name if known. No corporate jargon.",
+        "writing_rules": [
+            "Address by first name if known.",
+            "No corporate jargon.",
+            "End with one explicit ask.",
+        ],
     },
     "x_thread_brand": {
         "template": (
             "A 4-6 tweet thread. First tweet hooks; each subsequent tweet "
             "delivers one point; last tweet has a CTA. Number each tweet `1/`."
         ),
-        "writing_rules": "Each tweet <= 280 characters.",
+        "writing_rules": [
+            "Each tweet <= 280 characters.",
+            "Number each tweet (1/, 2/, ...).",
+            "Last tweet contains the CTA.",
+        ],
     },
     "email_speaker_pitch": {
         "template": (
@@ -38,20 +50,32 @@ CONTENT_TYPE_CONFIGS: dict[str, dict] = {
             "the first line. Body 150-250 words. Names a specific session "
             "slot and concrete topic the author can speak on."
         ),
-        "writing_rules": "Sign with the author's name. No emojis.",
+        "writing_rules": [
+            "Subject line on the first line.",
+            "Sign with the author's name.",
+            "No emojis.",
+        ],
     },
     "email_collaboration": {
         "template": (
             "A warm academic outreach email asking about collaboration. "
             "Reference a shared topic explicitly. 150-250 words. Soft ask."
         ),
-        "writing_rules": "Reply-friendly closing.",
+        "writing_rules": [
+            "Reference one shared topic explicitly.",
+            "Reply-friendly closing.",
+            "Soft ask, not pitch.",
+        ],
     },
     "email_service": {
         "template": (
             "A value-first service outreach email. Open with what the "
             "recipient gets. 150-200 words. One CTA only, in the last line."
         ),
-        "writing_rules": "No hard sell language.",
+        "writing_rules": [
+            "Open with what the recipient gets.",
+            "Exactly one CTA, on the last line.",
+            "No hard-sell language.",
+        ],
     },
 }

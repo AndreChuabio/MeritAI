@@ -71,18 +71,32 @@ class Senso:
 
     # ---- Content Types ----
 
+    @staticmethod
+    def _normalize_ct(d: dict) -> dict:
+        """Add an `id` alias from `content_type_id` so callers can use either."""
+        if "content_type_id" in d and "id" not in d:
+            d = {**d, "id": d["content_type_id"]}
+        return d
+
     def list_content_types(self) -> list[dict]:
         resp = self._request("GET", "/org/content-types")
         if isinstance(resp, list):
-            return resp
-        return resp.get("items", [])
+            items = resp
+        else:
+            # Senso wraps under `content_types`; older docs hinted at `items`.
+            items = resp.get("content_types") or resp.get("items") or []
+        return [self._normalize_ct(it) for it in items]
 
     def create_content_type(self, name: str, config: dict) -> dict:
-        return self._request(
+        resp = self._request(
             "POST",
             "/org/content-types",
             json={"name": name, "config": config},
         )
+        return self._normalize_ct(resp)
+
+    def delete_content_type(self, content_type_id: str) -> None:
+        self._request("DELETE", f"/org/content-types/{content_type_id}")
 
     def get_or_create_content_type(self, name: str, config: dict) -> str:
         for item in self.list_content_types():
@@ -114,17 +128,35 @@ class Senso:
             json={"name": name, "description": description},
         )
 
+    # ---- Questions (geo_questions / prompts) ----
+
+    def create_question(self, question_text: str, q_type: str = "awareness") -> str:
+        """Create a geo_question; return its id."""
+        resp = self._request(
+            "POST",
+            "/org/questions",
+            json={"question_text": question_text, "type": q_type},
+        )
+        return resp["geo_question_id"]
+
     # ---- Content Generation ----
 
     def generate_sample(self, content_type_id: str, context: str) -> str:
         """Kick off async sample generation; return the job id.
 
-        NOTE: Senso docs reference a `geo_question_id` form. If the server
-        rejects `context`, switch this to create a geo_question first and
-        pass that id. The orchestrator does not care which path is used.
+        Senso requires a `geo_question_id` (the topic prompt). We create
+        one on the fly from the caller's `context` so the orchestrator
+        stays a single call.
         """
-        body = {"content_type_id": content_type_id, "context": context}
-        resp = self._request("POST", "/org/content-generation/sample", json=body)
+        geo_question_id = self.create_question(context)
+        resp = self._request(
+            "POST",
+            "/org/content-generation/sample",
+            json={
+                "content_type_id": content_type_id,
+                "geo_question_id": geo_question_id,
+            },
+        )
         return resp["sample_job_id"]
 
     def get_sample_job(self, job_id: str) -> dict:

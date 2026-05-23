@@ -147,7 +147,15 @@ def test_get_or_create_creates_when_missing():
 # ---- Task 6: content generation ----
 
 @responses.activate
-def test_generate_sample_returns_job_id():
+def test_generate_sample_creates_question_then_sample():
+    # Step 1: create_question
+    responses.add(
+        responses.POST,
+        "https://apiv2.senso.ai/api/v1/org/questions",
+        json={"geo_question_id": "q-1", "question_text": "hello", "type": "awareness"},
+        status=201,
+    )
+    # Step 2: generate sample
     responses.add(
         responses.POST,
         "https://apiv2.senso.ai/api/v1/org/content-generation/sample",
@@ -157,9 +165,13 @@ def test_generate_sample_returns_job_id():
     s = Senso(api_key="k")
     job_id = s.generate_sample(content_type_id="ct-1", context="hello")
     assert job_id == "job-abc"
-    body = responses.calls[0].request.body
-    assert b'"content_type_id": "ct-1"' in body
-    assert b'"context": "hello"' in body
+    # Verify the question body
+    q_body = responses.calls[0].request.body
+    assert b'"question_text": "hello"' in q_body
+    # Verify the generate body uses the geo_question_id
+    g_body = responses.calls[1].request.body
+    assert b'"content_type_id": "ct-1"' in g_body
+    assert b'"geo_question_id": "q-1"' in g_body
 
 
 @responses.activate
