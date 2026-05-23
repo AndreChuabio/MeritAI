@@ -3,8 +3,12 @@ import pytest
 from paperpilot.outreach.purpose import Purpose, PURPOSE_CHANNELS, channels_for
 
 
-def test_purpose_enum_has_four_values():
-    assert {p.value for p in Purpose} == {"VISA", "CAREER", "BRAND", "SERVICE"}
+def test_purpose_enum_has_five_values():
+    assert {p.value for p in Purpose} == {"VISA", "CAREER", "NETWORK", "BRAND", "SERVICE"}
+
+
+def test_network_targets_collab_email_and_linkedin_dm():
+    assert channels_for(Purpose.NETWORK) == ["email_collaboration", "linkedin_dm_career"]
 
 
 def test_purpose_channels_covers_all_purposes():

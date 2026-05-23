@@ -36,6 +36,11 @@ def _build_context(purpose: Purpose, user_context: str) -> str:
             "Audience: a peer or senior whose work overlaps yours, "
             "approached for networking or mentorship."
         ),
+        Purpose.NETWORK: (
+            "Audience: a research lab, faculty member, or principal "
+            "investigator. Tone: academic-warm. Goal: open a conversation "
+            "about visiting/collaborating on shared research interests."
+        ),
         Purpose.BRAND: (
             "Audience: your professional network. Build credibility around "
             "the topic below; do not pitch a product."

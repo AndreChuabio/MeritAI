@@ -8,6 +8,7 @@ from enum import Enum
 class Purpose(str, Enum):
     VISA = "VISA"
     CAREER = "CAREER"
+    NETWORK = "NETWORK"
     BRAND = "BRAND"
     SERVICE = "SERVICE"
 
@@ -15,6 +16,7 @@ class Purpose(str, Enum):
 PURPOSE_CHANNELS: dict[Purpose, list[str]] = {
     Purpose.VISA:    ["email_speaker_pitch", "email_collaboration"],
     Purpose.CAREER:  ["linkedin_dm_career"],
+    Purpose.NETWORK: ["email_collaboration", "linkedin_dm_career"],
     Purpose.BRAND:   ["linkedin_post_brand", "x_thread_brand"],
     Purpose.SERVICE: ["linkedin_post_brand", "email_service", "x_thread_brand"],
 }

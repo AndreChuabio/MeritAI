@@ -22,6 +22,7 @@ from paperpilot.outreach.log import (
     find_user_profile_by_name,
 )
 from paperpilot.outreach.orchestrator import generate_drafts
+from paperpilot.outreach.github_repos import list_user_repos
 from paperpilot.outreach.nimble import NimbleClient, NimbleAPIError
 from paperpilot.outreach.purpose import Purpose
 from paperpilot.outreach.scholar import fetch as fetch_scholar
@@ -64,7 +65,9 @@ if not _HAS_SENSO_KEY:
 
 _HAS_NIMBLE_KEY = bool(os.environ.get("NIMBLE_API_KEY"))
 
-tab_brand, tab_generate, tab_blast = st.tabs(["Personal Brand", "Generate Content", "Blast"])
+tab_brand, tab_generate, tab_search, tab_blast = st.tabs(
+    ["Personal Brand", "Generate Content", "Search People", "Blast"]
+)
 
 
 # =========================================================================
@@ -219,14 +222,20 @@ with tab_generate:
         captions=[
             "Extraordinary-ability dossier (O-1 / NIW)",
             "Networking / mentorship",
+            "Collaborate with a research lab / faculty",
             "Personal brand building",
             "Sell a service or product",
         ],
     )
     user_ctx = st.text_area(
         "What's this about?",
+        value=st.session_state.get(
+            "gen_user_ctx",
+            "I'd like to collaborate with your research lab as a visiting scholar.",
+        ),
         placeholder="e.g. I want to apply to keynote at ML4H 2026 on retrieval calibration for medical QA.",
         height=100,
+        key="gen_user_ctx",
     )
 
     if st.button(
@@ -281,74 +290,21 @@ with tab_generate:
 # =========================================================================
 # Blast tab — queued messages + Nimble-powered people search
 # =========================================================================
-with tab_blast:
-    # Paper selector — scopes both the queue context and the target search.
-    scholar_url_for_fetch = st.session_state.get("brand_scholar") or None
-    try:
-        scholar_data = fetch_scholar(scholar_url_for_fetch)
-        all_papers = scholar_data.papers or []
-    except Exception:
-        all_papers = []
-
-    if all_papers:
-        paper_options = [p["title"] for p in all_papers]
-        selected_paper_titles = st.multiselect(
-            "Papers this blast is about",
-            options=paper_options,
-            default=st.session_state.get("blast_papers", []),
-            help=(
-                "Pick the paper(s) this outreach is about. Selected titles "
-                "are added to the target search and shown next to every "
-                "queued message."
-            ),
-        )
-        st.session_state["blast_papers"] = selected_paper_titles
-    else:
-        selected_paper_titles = []
-        st.caption("No papers found on your Scholar profile. Skipping paper picker.")
-
-    if selected_paper_titles:
-        st.markdown(
-            "**About: " + " · ".join(f"_{t}_" for t in selected_paper_titles) + "**"
-        )
-
-    st.divider()
-
-    st.subheader("Blast Queue")
-    st.caption("Messages you've added from Generate Content. Send to relevant targets in one batch.")
-
-    blast = st.session_state.get("blast_queue", [])
-    if not blast:
-        st.info("Queue is empty. Generate a draft on the **Generate Content** tab and click **Add to Blast**.")
-    else:
-        for i, item in enumerate(blast):
-            with st.expander(f"{i + 1}. {item['channel']}", expanded=(i == 0)):
-                st.text_area(
-                    "Message",
-                    value=item["markdown"],
-                    key=f"blast_msg_{i}",
-                    height=180,
-                )
-                if st.button("Remove from queue", key=f"blast_remove_{i}"):
-                    blast.pop(i)
-                    st.rerun()
-        if st.button("Clear queue"):
-            st.session_state["blast_queue"] = []
-            st.rerun()
-
-    st.divider()
-
+# =========================================================================
+# Search People tab — Nimble-powered audience search + Add to Blast
+# =========================================================================
+with tab_search:
     st.subheader("Find people to reach out to")
     st.caption(
         "Describe the audience. We search LinkedIn (and the open web for emails) "
-        "and return matching profiles you can blast to."
+        "and return matching profiles. Click **Add to Blast** to queue a target."
     )
 
     criteria = st.text_input(
         "Audience criteria",
         value=st.session_state.get(
             "blast_criteria",
-            "clinical ML researchers in New York",
+            "AI research labs in New York, PHD, with research",
         ),
         placeholder="e.g. healthcare AI engineers in San Francisco, hiring",
     )
@@ -361,18 +317,13 @@ with tab_blast:
         if not criteria.strip():
             st.warning("Enter a criteria to search.")
         else:
-            # Augment criteria with the selected paper titles so the search
-            # surfaces people connected to that work.
-            paper_aug = " ".join(f'"{t}"' for t in selected_paper_titles)
-            augmented = f"{criteria} {paper_aug}".strip()
             try:
                 nimble = NimbleClient.from_env()
                 with st.spinner("Searching via Nimble..."):
-                    people = nimble.find_people(augmented, limit=limit)
+                    people = nimble.find_people(criteria, limit=limit)
                     emails: list[dict] = []
                     if include_email and people:
-                        # Heuristic email-finding search per matched name.
-                        for p in people[:3]:  # cap to 3 to keep demo fast
+                        for p in people[:3]:
                             name = (p.get("title") or "").split(" - ")[0].strip()
                             if not name:
                                 continue
@@ -386,8 +337,8 @@ with tab_blast:
                                     emails.append({"name": name, "hits": hits})
                             except NimbleAPIError:
                                 pass
-                st.session_state["blast_targets"] = people
-                st.session_state["blast_emails"] = emails
+                st.session_state["blast_search_results"] = people
+                st.session_state["blast_search_emails"] = emails
                 st.success(f"Found {len(people)} target(s).")
             except NimbleAPIError as e:
                 st.error(f"Nimble error: {e}")
@@ -397,10 +348,12 @@ with tab_blast:
     if not _HAS_NIMBLE_KEY:
         st.caption("`NIMBLE_API_KEY` not set — add it to `.env` to enable target search.")
 
-    targets = st.session_state.get("blast_targets", [])
-    if targets:
-        st.markdown(f"**Targets ({len(targets)})**")
-        for j, t in enumerate(targets):
+    results = st.session_state.get("blast_search_results", [])
+    if results:
+        st.markdown(f"**Results ({len(results)})**")
+        targets_added = st.session_state.setdefault("blast_targets_added", [])
+        added_urls = {t.get("url") for t in targets_added}
+        for j, t in enumerate(results):
             with st.container(border=True):
                 title = t.get("title") or "(no title)"
                 desc = t.get("description") or ""
@@ -410,15 +363,141 @@ with tab_blast:
                     st.caption(desc[:240])
                 if url:
                     st.markdown(f"[Open profile →]({url})")
-                if blast:
-                    pick_label = "Send first queued message to this target"
-                    if st.button(pick_label, key=f"send_{j}"):
-                        st.toast(f"Queued send to {url} ✓ (demo)")
+                if url in added_urls:
+                    st.success("Added to Blast ✓")
+                else:
+                    if st.button("Add to Blast", key=f"add_target_{j}"):
+                        targets_added.append({
+                            "title": title, "description": desc, "url": url,
+                        })
+                        st.rerun()
 
-    emails = st.session_state.get("blast_emails", [])
+    emails = st.session_state.get("blast_search_emails", [])
     if emails:
         st.markdown("**Email leads** (open-web search results)")
         for e in emails:
             with st.expander(e["name"]):
                 for h in e.get("hits", []):
                     st.markdown(f"- [{h.get('title','(link)')}]({h.get('url','')}) — {h.get('description','')[:160]}")
+
+
+# =========================================================================
+# Blast tab — Messages + Targets + Personal Resources + Send
+# =========================================================================
+with tab_blast:
+    blast_msgs = st.session_state.get("blast_queue", [])
+    blast_targets = st.session_state.get("blast_targets_added", [])
+
+    # ---- Personal Resources picker (papers / GitHub repos / resume) ----
+    st.subheader("Attach personal resources")
+    st.caption("Pick what to reference in the blast — papers, repos, or your resume.")
+
+    # Papers (from Scholar mock or live fetch)
+    scholar_url_for_fetch = st.session_state.get("brand_scholar") or None
+    try:
+        scholar_data = fetch_scholar(scholar_url_for_fetch)
+        all_papers = scholar_data.papers or []
+    except Exception:
+        all_papers = []
+
+    # GitHub repos (via PyGithub)
+    gh_url = st.session_state.get("brand_github", "")
+    @st.cache_data(show_spinner=False)
+    def _cached_repos(url: str) -> list[dict]:
+        return list_user_repos(url) if url else []
+    repos = _cached_repos(gh_url) if gh_url else []
+
+    resume_text = st.session_state.get("brand_resume", "")
+
+    res_cols = st.columns([2, 2, 1])
+    selected_papers = res_cols[0].multiselect(
+        "Papers",
+        options=[p["title"] for p in all_papers],
+        default=st.session_state.get("blast_res_papers", []),
+        placeholder="Search your research papers...",
+    )
+    st.session_state["blast_res_papers"] = selected_papers
+
+    selected_repos = res_cols[1].multiselect(
+        "GitHub repos",
+        options=[r["name"] for r in repos],
+        default=st.session_state.get("blast_res_repos", []),
+        placeholder="Search your GitHub repos...",
+    )
+    st.session_state["blast_res_repos"] = selected_repos
+
+    attach_resume = res_cols[2].checkbox(
+        "Resume",
+        value=st.session_state.get("blast_res_resume", False),
+        help="Attach your resume text to every send.",
+    )
+    st.session_state["blast_res_resume"] = attach_resume
+
+    summary_chips: list[str] = []
+    if selected_papers:
+        summary_chips += [f"📄 {t}" for t in selected_papers]
+    if selected_repos:
+        summary_chips += [f"🔧 {r}" for r in selected_repos]
+    if attach_resume and resume_text:
+        summary_chips.append("📋 Resume")
+    if summary_chips:
+        st.markdown("**Attached:** " + " · ".join(summary_chips))
+    if gh_url and not repos:
+        st.caption(f"Could not list repos for `{gh_url}` (check GITHUB_TOKEN).")
+
+    st.divider()
+
+    # ---- Messages queue ----
+    st.subheader("Messages")
+    if not blast_msgs:
+        st.info("No messages yet. Generate one on **Generate Content** and click **Add to Blast**.")
+    else:
+        for i, item in enumerate(blast_msgs):
+            with st.expander(f"{i + 1}. {item['channel']}", expanded=(i == 0)):
+                st.text_area(
+                    "Message",
+                    value=item["markdown"],
+                    key=f"blast_msg_{i}",
+                    height=180,
+                )
+                if st.button("Remove from queue", key=f"blast_remove_{i}"):
+                    blast_msgs.pop(i)
+                    st.rerun()
+        if st.button("Clear messages"):
+            st.session_state["blast_queue"] = []
+            st.rerun()
+
+    st.divider()
+
+    # ---- Targets queue ----
+    st.subheader("Targets")
+    if not blast_targets:
+        st.info("No targets yet. Add some on **Search People**.")
+    else:
+        for k, t in enumerate(blast_targets):
+            with st.container(border=True):
+                st.markdown(f"**{t.get('title','(no title)')}**")
+                if t.get("description"):
+                    st.caption(t["description"][:200])
+                if t.get("url"):
+                    st.markdown(f"[Open profile →]({t['url']})")
+                if st.button("Remove", key=f"target_remove_{k}"):
+                    blast_targets.pop(k)
+                    st.rerun()
+        if st.button("Clear targets"):
+            st.session_state["blast_targets_added"] = []
+            st.rerun()
+
+    st.divider()
+
+    # ---- Send ----
+    can_send = bool(blast_msgs) and bool(blast_targets)
+    if st.button("🚀 Send Blast", type="primary", disabled=not can_send, use_container_width=True):
+        n = len(blast_msgs) * len(blast_targets)
+        st.toast(f"Queued {n} sends (demo) ✓")
+        st.success(
+            f"Blast queued: {len(blast_msgs)} message(s) × {len(blast_targets)} target(s) "
+            f"= {n} sends. Resources attached: {len(summary_chips)}."
+        )
+    if not can_send:
+        st.caption("Need at least one message AND one target to send.")
