@@ -24,6 +24,9 @@ import os
 
 # Generous ceiling so we always leave room for the prompt + the response.
 DEFAULT_TOKEN_CAP = 600_000
+# Hard cap on serial PyGithub per-file fetches. Even if the token budget
+# allows more, demo latency suffers past ~30 files (each fetch is ~0.5-1s).
+DEFAULT_MAX_FILES = 30
 
 # Files we want to prioritise (highest signal for a research-paper summary).
 PRIORITY_EXTENSIONS = (
@@ -149,7 +152,11 @@ def _rank_files(files: list[tuple[str, int]]) -> list[tuple[str, int]]:
     return sorted(files, key=key)
 
 
-def fetch_repo(url: str, token_cap: int = DEFAULT_TOKEN_CAP) -> RepoBundle:
+def fetch_repo(
+    url: str,
+    token_cap: int = DEFAULT_TOKEN_CAP,
+    max_files: int = DEFAULT_MAX_FILES,
+) -> RepoBundle:
     """Pull a public/private repo and assemble a token-capped bundle."""
     owner, name = _parse_repo_url(url)
     gh = _gh_client()
@@ -167,7 +174,7 @@ def fetch_repo(url: str, token_cap: int = DEFAULT_TOKEN_CAP) -> RepoBundle:
     bundle_files: list[tuple[str, str]] = []
 
     for path, _size in files_meta:
-        if used_tokens >= token_cap:
+        if used_tokens >= token_cap or len(bundle_files) >= max_files:
             break
         try:
             blob = repo.get_contents(path)
