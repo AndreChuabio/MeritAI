@@ -1,23 +1,43 @@
-# PaperPilot
+# Productionize Your Product
 
-Drop a GitHub repo. Get a research paper draft for a matched Call-for-Papers. Every LLM call traced.
+Three agentic surfaces on one stack: turn your GitHub repo into a research paper, draft your personal-brand outreach for it, and track your O-1 / National Interest Waiver visa progress. Every LLM call traced.
 
-Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ.
+Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ. Live at **https://paperpilot-production-97dc.up.railway.app**.
 
 ---
 
 ## What it does
 
-PaperPilot turns a GitHub repository into a venue-targeted academic paper draft:
+A three-page Streamlit app (`Productize.py` entry + `pages/Market.py` + `pages/Track.py`) on a shared agentic spine.
 
-1. **Ingest.** Pulls the README, file tree, and a ranked sample of source files from any GitHub repo. Concatenates into a single bundle under a 600K-token cap.
-2. **Summarize.** Sends the bundle to Gemini through Vercel AI Gateway (1M-context window). Gets back a structured `ResearchSummary`: problem, contribution, method, results, limitations, keywords.
-3. **Match.** Embeds the summary and ranks 41 hand-curated CFPs (NeurIPS, ICLR, ICML, ACL, EMNLP, KDD, CVPR, ML4H, MICCAI, CHIL, AMIA, workshops, journals) in ClickHouse Cloud by semantic fit + deadline proximity. **Augmented with live Nimble Search:** the same step also queries the open web for "<keywords> conference <year> paper submission deadline," embeds each web hit against the summary, and merges the top 3 into the candidate pool. Venue cards in the UI carry a `LIVE · Nimble` or `Curated` badge so the source is always visible.
-4. **Draft.** Streams a paper section-by-section through Claude: abstract, intro, related work, method. The related-work section is citation-grounded — the model is given a pre-filtered list of arxiv candidates from ClickHouse and a strict "cite ONLY these" instruction. Any unsanctioned `[arxiv:...]` marker is stripped post-hoc with a visible warning.
-5. **Export.** Downloads as LaTeX + BibTeX, ready to open in Overleaf.
-6. **Extract Claude plugin (bonus).** A second pass over the same repo bundle identifies reusable units inside the code and packages them as a complete Claude Code plugin: `SKILL.md` files, slash commands, subagents, lifecycle hooks (PreToolUse / PostToolUse / Stop / etc.), and MCP server build prompts -- bundled with a `plugin.json` manifest in the standard `~/.claude/plugins/<name>/` layout. Download as a single drop-in zip.
+### 📄 Productize — repo → paper draft for a matched venue
 
-Every LLM call is captured by **Lapdog** (Datadog's local LLM-observability CLI) and forwarded to Datadog cloud with one env var. The UI also surfaces a live **cost + token pill** on every run: $X.XXXX spent, N tokens in / out, summed across Gemini ingest and all four Claude draft sections.
+1. **Ingest.** Pulls README + file tree + ranked source files from any GitHub repo. Concatenates into a single bundle under a 600K-token cap.
+2. **Summarize.** Sends the bundle to Gemini 2.5 Flash through Vercel AI Gateway (1M-context window). Returns a structured `ResearchSummary`: problem, contribution, method, results, limitations, keywords.
+3. **Match.** Embeds the summary and ranks 53 CFPs (41 curated + 12 Nimble-discovered) in ClickHouse Cloud by semantic fit + deadline proximity. **Augmented with live Nimble Search:** queries the open web in parallel and merges the top 3 hits into the candidate pool. Venue cards carry a `LIVE · Nimble` or `Curated` badge.
+4. **Draft.** Streams the paper section-by-section through Claude Sonnet 4.6. Pre-pended with **Senso KB tone exemplars** retrieved per `(venue, section)`. Related-work citations are gated against an arxiv corpus pre-filter; unsanctioned `[arxiv:...]` markers are stripped post-hoc with a visible warning.
+5. **Export.** LaTeX + BibTeX, ready to open in Overleaf. Auto-persisted to ClickHouse `session_artifacts`.
+6. **Extract Claude plugin.** A second pass over the same repo bundle identifies reusable units and packages them as a complete Claude Code plugin: `SKILL.md` files, slash commands, subagents, lifecycle hooks, MCP build prompts, all bundled with a `plugin.json` in the standard `~/.claude/plugins/<name>/` layout. Drop-in zip.
+
+### 📣 Market — outreach drafting on a Senso brand kit
+
+- **Personal Brand tab.** Save / load a profile (name, title, voice, links, resume) into a Senso `brand_kit` so all subsequent drafts inherit the user's voice.
+- **Generate Content tab.** Pick a purpose (VISA, SPEAKING, COLLAB, NETWORK), describe the goal, get drafts back via Senso's content-generation pipeline. Each draft includes a `cost_source`-tagged trace.
+- **Search People tab.** Discover GitHub users / open-source maintainers via the `github_repos.py` helper.
+- **Blast tab.** Schedule + dispatch drafts to outbound channels.
+
+### 📈 Track — O-1 + National Interest Waiver progress dashboard
+
+Aggregates every signal we have about the candidate's readiness for an O-1 (extraordinary ability) and NIW case:
+
+- Authored scholarly articles (Google Scholar via `outreach/scholar.py`)
+- Citations & impact (Scholar academic + Senso AI)
+- Speaking + collaboration outreach drafted vs. posted (from `outreach_log`)
+- Headline gauges per USCIS criteria set + per-channel bar chart + drafts-over-time line
+
+### 🟢 Observability throughout
+
+Every LLM call wrapped by `trace.step(...)` → in-process buffer (UI right rail) + ClickHouse `trace_log` (audit) + **Lapdog** local dashboard + **Datadog LLM Observability** cloud forward. Cost+token pill in the right rail sums every `.end` event with a `(est.)` tag when the Gateway omits usage on streamed responses.
 
 ---
 
@@ -41,14 +61,16 @@ Every LLM call is captured by **Lapdog** (Datadog's local LLM-observability CLI)
 
 | Layer | Stack | Sponsor |
 |-------|-------|---------|
-| LLM telemetry | Lapdog local + Datadog cloud forward | Datadog |
-| Long-context ingest | Gemini 2.5 Flash via AI Gateway | DeepMind |
-| Drafting | Claude Sonnet 4.6 streamed via AI Gateway | Vercel AI Gateway |
-| Vector search + audit log + session artifacts | ClickHouse Cloud (`cfp`, `arxiv`, `trace_log`, `session_artifacts`) | ClickHouse |
-| Live web data | Nimble Search + Answers + Extract (`paperpilot/nimble_client.py`) | Nimble |
-| Cost + token accounting | `tiktoken` fallback + per-model price table | (observability) |
-| Citation grounding | arxiv API + ClickHouse pre-filter + post-hoc strip | (anti-hallucination) |
-| Demo venue | ML4H 2026 | (clinical-ML authenticity) |
+| LLM routing | OpenAI-compatible client → multi-provider | **Vercel AI Gateway** |
+| Long-context ingest | Gemini 2.5 Flash, 1M-ctx | **DeepMind** |
+| Drafting | Claude Sonnet 4.6, streamed | **Anthropic** |
+| Vector search + audit + artifacts | ClickHouse Cloud — 4 tables: `cfp`, `arxiv`, `trace_log`, `session_artifacts` | **ClickHouse** |
+| Live web data | `/v1/search` + `/v1/search?include_answer` + `/v1/extract` | **Nimble** |
+| Brand + tone KB | `/org/brand-kit` + `/org/kb/raw` + `/org/search/context` + `/org/content-generation` | **Senso** |
+| LLM observability | Lapdog local + Datadog LLM Observability cloud (`DD_LLMOBS_AGENTLESS_ENABLED=1`) | **Datadog** |
+| Cost + token accounting | `tiktoken` fallback + per-model price table, `cost_source: gateway\|estimated` | (observability) |
+| Citation grounding | arxiv corpus pre-filter + post-hoc regex strip | (anti-hallucination) |
+| Deployment | Railway (Nixpacks builder, Streamlit on `$PORT`) | (infra) |
 
 ---
 
@@ -92,7 +114,7 @@ Set `NIMBLE_API_KEY` to enable; without it the buttons hide, venue ranking falls
 ## Quickstart
 
 ```bash
-# 0. Prereqs: macOS, uv, brew, gh CLI. (Vercel AI Gateway is HTTPS-only -- no CLI needed.)
+# 0. Prereqs: macOS, uv, brew, gh CLI.
 
 # 1. Install dependencies
 uv sync
@@ -101,27 +123,42 @@ brew install datadog/lapdog/lapdog
 # 2. Configure
 cp .env.example .env
 # Required: AI_GATEWAY_API_KEY, CLICKHOUSE_HOST/USER/PASSWORD
-# Optional: DD_API_KEY, DD_SITE, DD_LLMOBS_ENABLED=1, DD_LLMOBS_ML_APP for cloud forward
-# Optional: NIMBLE_API_KEY to enable live Search/Answers/Extract on venue cards + plugin extractor
+# Recommended: DD_API_KEY + DD_SITE + DD_LLMOBS_ENABLED=1 + DD_LLMOBS_ML_APP for cloud forward
+# Recommended: NIMBLE_API_KEY for live venue discovery + verification + prior-art
+# Recommended: SENSO_API_KEY for brand-kit + tone KB + outreach drafting
 
-# 3. Seed corpora into ClickHouse (CFPs + arxiv embeddings)
-make seed
+# 3. Seed corpora
+make seed        # CFP + arxiv embeddings into ClickHouse
+make seed-senso  # tone exemplars into Senso KB
 
 # 4. Launch
 make dev
 # -> http://localhost:8501  (Streamlit UI)
-# -> http://localhost:8126  (Lapdog dashboard)
-# -> Datadog LLM Observability (cloud) via DD_LLMOBS_AGENTLESS_ENABLED=1 forward
+# -> http://localhost:8126  (Lapdog local)
+# -> https://lapdog.datadoghq.com (Lapdog browser dashboard, reads from :8126)
+# -> Datadog LLM Observability cloud (when DD_LLMOBS_AGENTLESS_ENABLED=1)
 ```
 
-### Demo flows on the Streamlit UI
+### Production deploy (Railway)
 
-- **Pipeline tab.** Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). "Ingest + match venues" runs the full Gemini summary + ClickHouse venue ranking. Pick a venue → live streamed Claude draft with the cost pill climbing in the right rail. After ingest, "Extract plugin" runs a second Gemini pass on the same bundle and produces a downloadable Claude Code plugin zip: skills, slash commands, subagents, lifecycle hooks, MCP build prompts, all bundled with a `plugin.json` manifest and a top-level README that explains the install.
-- **Load demo cache.** Falls back to a precomputed `data/demo_cache.json` snapshot. Drips synthetic trace events with realistic timings (~6s total) so the agent appears to work even on a flaky network — paper draft + venue card + full trace land instantly afterward.
-- **Phase 1 hello-world tab.** One-button `make ping` equivalent. Single LLM round-trip to verify Gateway + Lapdog + Datadog wires are alive before doing a real run.
+The repo includes `railway.toml` + `nixpacks.toml` + `scripts/railway_env_setup.sh`:
 
-`make ping` runs the same hello-world call from the command line.
-`make precompute URL=https://github.com/owner/repo` refreshes the demo cache.
+```bash
+railway login
+railway init --name paperpilot
+make railway-env       # pushes every .env var (with --skip-deploys) + auto-sets DD_LLMOBS_AGENTLESS_ENABLED=1
+make railway-deploy    # railway up --detach
+```
+
+Live URL is printed by `railway domain` (or generated automatically). The production container ships LLM traces to Datadog cloud directly via the agentless ddtrace mode since Lapdog is macOS-only.
+
+### Three pages in the live app
+
+- **Productize** (`Productize.py`). Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). Ingest → match → draft → export `.tex/.bib`. "Extract plugin" runs the Claude Code plugin extractor on the same bundle. "Load demo cache" replays a precomputed `data/demo_cache.json` with a 6-second synthetic event drip (Wi-Fi-failure insurance).
+- **Market** (`pages/Market.py`). Personal Brand / Generate Content / Search People / Blast tabs over a Senso brand-kit.
+- **Track** (`pages/Track.py`). O-1 + NIW progress gauges + Scholar citation tracking + drafts-vs-posted analytics.
+
+`make ping` runs a CLI hello-world. `make precompute URL=...` refreshes the demo cache. `make meta` runs PaperPilot on its own repo to regenerate `submission/paperpilot.tex`.
 
 ---
 
@@ -129,33 +166,61 @@ make dev
 
 ```
 agentichack/
-  app.py                          Streamlit UI (Pipeline + Phase 1 tabs)
+  Productize.py                   Streamlit entry: repo -> paper -> plugin
+  pages/
+    Market.py                       Senso brand kit + outreach drafting (4 tabs)
+    Track.py                        O-1 + NIW progress dashboard
+
   paperpilot/
     github_ingest.py              PyGithub repo -> ranked file bundle
-    llm_ingest.py                 Gemini 1M-ctx -> structured summary
+    llm_ingest.py                 Gemini 1M-ctx -> structured ResearchSummary
     embed.py                      text-embedding-3-small via Gateway
-    cfp_match.py                  cosineDistance venue ranking
+    cfp_match.py                  cosineDistance venue ranking + Nimble live merge
     arxiv_lookup.py               citation candidate pre-filter (ClickHouse + arxiv)
-    draft.py                      section streaming + citation strip + tiktoken/cost fallback
-    skill_extract.py              repo bundle -> structured PluginPack (skills/commands/agents/hooks/mcps) via Gemini
-    skill_render.py               PluginPack -> Claude Code plugin directory zip (manifest + dirs + hook scripts)
-    nimble_client.py              Nimble Search/Answers/Extract HTTPS client (httpx + trace.step + timeouts)
-    clickhouse_client.py          schema + trace_log + session_artifacts (paper/plugin persistence)
+    draft.py                      section streaming + Senso tone + citation strip + tiktoken/cost fallback
+    skill_extract.py              repo bundle -> structured PluginPack via Gemini
+    skill_render.py               PluginPack -> Claude Code plugin directory zip
+    nimble_client.py              Search / Answers / Extract HTTPS client
+    senso_client.py               KB ingest + search_context (tone retrieval for Productize)
+    clickhouse_client.py          schema + trace_log + session_artifacts
     latex_export.py               .tex + .bib assembly
-    pipeline.py                   end-to-end orchestrator + demo cache writer (totals rolled up)
+    pipeline.py                   end-to-end orchestrator + demo cache + save_artifact
     trace.py                      log_event + step context manager + in-process buffer
-    gateway.py                    Vercel AI Gateway client (model strings encode provider)
+    gateway.py                    Vercel AI Gateway client
     llm_ping.py                   Phase 1 hello-world helper
+    outreach/                     Market + Track logic
+      senso.py                      Senso brand-kit + content-types + content-generation
+      log.py                        UserProfile + draft log (ClickHouse-backed)
+      orchestrator.py               generate_drafts orchestration
+      purpose.py                    VISA / SPEAKING / COLLAB / NETWORK enum + prompts
+      scholar.py                    Google Scholar fetch for Track dashboard
+      content_types.py              Senso content-type seed helpers
+      github_repos.py               Find people via GitHub for outreach search
+
   data/
     cfp_seed.json                 41 hand-curated CFPs
     arxiv_seed.json               223 arxiv papers
+    demo_cache.json               precomputed pipeline output for offline demo
+
   scripts/
-    seed_clickhouse.py            embed + insert corpora
+    seed_clickhouse.py            embed + insert CFP + arxiv corpora
+    seed_senso.py                 ingest tone exemplars into Senso KB
     fetch_arxiv.py                refresh the arxiv corpus
-    demo_precompute.py            DEMO_MODE cache for offline demo
-    meta_flex.py                  run PaperPilot on itself
-  submission/                     LaTeX output drop
-  Makefile                        dev / seed / ping / precompute / meta / push
+    refresh_cfp_corpus.py         Nimble -> ClickHouse cfp batch refresh (up to 20 venues)
+    demo_precompute.py            DEMO_MODE cache writer
+    meta_flex.py                  run the agent on this repo itself
+    railway_env_setup.sh          push .env into the linked Railway service
+
+  submission/
+    paperpilot.tex                meta-flex paper draft (PaperPilot on PaperPilot)
+    references.bib                BibTeX for paperpilot.tex
+    summary.json                  structured ResearchSummary from meta_flex
+    demo_script.md                90s / 60s / 30s pitch + Q&A + fallbacks
+    linkedin_post.md              post-hackathon LinkedIn drafts
+
+  railway.toml + nixpacks.toml    Railway deploy config
+  Makefile                        dev / seed / ping / precompute / meta / refresh-corpus /
+                                  railway-env / railway-deploy / push
 ```
 
 ---
@@ -188,7 +253,9 @@ That paper draft ships with the Devpost.
 
 ## Team
 
-- **Senor Clown** — engineering
-- **Nikki** — clinical-ML domain (Arya Health), academic-tone review, ML4H demo realism
+- **Andre Chuabio** ([@AndreChuabio](https://github.com/AndreChuabio)) — engineering: agentic pipeline (Productize), observability, deploy
+- **Nikki** — outreach + immigration-track workflow (Market + Track), Senso brand kit, demo-tone review
 
-Built for the Agentic Engineering Hack NYC at Datadog HQ, sponsored by Datadog, ClickHouse, Nimble, Luminai, and DeepMind.
+Built at the **Agentic Engineering Hack NYC** at **Datadog HQ**, 2026-05-23. Sponsors: **Vercel AI Gateway**, **Anthropic**, **DeepMind**, **ClickHouse**, **Nimble**, **Senso**, **Datadog**, **Luminai**.
+
+Live: https://paperpilot-production-97dc.up.railway.app · Code: https://github.com/AndreChuabio/agentichack
