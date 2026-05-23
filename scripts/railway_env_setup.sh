@@ -19,10 +19,14 @@ if ! command -v railway >/dev/null 2>&1; then
   exit 1
 fi
 
-# Set DD_LLMOBS_AGENTLESS_ENABLED=1 explicitly -- it's required in cloud
+# --skip-deploys suppresses the per-variable redeploy thrash; we trigger
+# a single redeploy at the end so all variables are applied atomically.
+SKIP="--skip-deploys"
+
+# Set DD_LLMOBS_AGENTLESS_ENABLED=1 explicitly -- required in cloud
 # because there's no local Lapdog agent on Railway.
 echo "Setting DD_LLMOBS_AGENTLESS_ENABLED=1..."
-railway variables --set "DD_LLMOBS_AGENTLESS_ENABLED=1"
+railway variables $SKIP --set "DD_LLMOBS_AGENTLESS_ENABLED=1"
 
 # Push every uncommented KEY=VALUE from .env.
 while IFS='=' read -r key value; do
@@ -34,9 +38,10 @@ while IFS='=' read -r key value; do
   value="${value%\"}"; value="${value#\"}"
   value="${value%\'}"; value="${value#\'}"
   echo "Setting $key..."
-  railway variables --set "$key=$value"
+  railway variables $SKIP --set "$key=$value"
 done < .env
 
 echo
-echo "Done. Verify with: railway variables"
-echo "Then deploy: railway up"
+echo "All variables set with --skip-deploys. Triggering one redeploy..."
+railway redeploy --yes 2>/dev/null || railway service redeploy 2>/dev/null || true
+echo "Done."
