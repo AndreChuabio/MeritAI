@@ -27,8 +27,8 @@ from paperpilot.pipeline import load_demo_cache
 
 load_dotenv()
 
-st.set_page_config(page_title="PaperPilot", page_icon="📄", layout="wide")
-st.title("PaperPilot")
+st.set_page_config(page_title="Productionize Your Product", page_icon="📄", layout="wide")
+st.title("Productionize Your Product")
 st.caption(
     "GitHub repo → Gemini summary → ClickHouse venue match → Claude paper draft. "
     "Traced end-to-end by Datadog Lapdog."

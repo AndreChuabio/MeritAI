@@ -5,6 +5,10 @@ from paperpilot.outreach.log import (
     mark_posted,
     upsert_user_profile,
     count_posted,
+    count_by_channel,
+    count_by_purpose,
+    drafts_by_day,
+    total_drafts,
     UserProfile,
 )
 
@@ -59,3 +63,49 @@ def test_count_posted_returns_int():
     client = MagicMock()
     client.query.return_value.result_rows = [[7]]
     assert count_posted("demo", client=client) == 7
+
+
+def test_count_by_channel_returns_mapping():
+    client = MagicMock()
+    client.query.return_value.result_rows = [
+        ("linkedin_post_brand", 4),
+        ("x_thread_brand", 2),
+        ("email_speaker_pitch", 3),
+    ]
+    out = count_by_channel("demo", client=client)
+    assert out == {
+        "linkedin_post_brand": 4,
+        "x_thread_brand": 2,
+        "email_speaker_pitch": 3,
+    }
+
+
+def test_count_by_purpose_returns_mapping():
+    client = MagicMock()
+    client.query.return_value.result_rows = [
+        ("VISA", 5),
+        ("BRAND", 3),
+    ]
+    out = count_by_purpose("demo", client=client)
+    assert out == {"VISA": 5, "BRAND": 3}
+
+
+def test_drafts_by_day_returns_list_of_pairs():
+    client = MagicMock()
+    client.query.return_value.result_rows = [
+        ("2026-05-21", 2),
+        ("2026-05-22", 5),
+        ("2026-05-23", 3),
+    ]
+    out = drafts_by_day("demo", client=client)
+    assert out == [
+        {"date": "2026-05-21", "count": 2},
+        {"date": "2026-05-22", "count": 5},
+        {"date": "2026-05-23", "count": 3},
+    ]
+
+
+def test_total_drafts_returns_int():
+    client = MagicMock()
+    client.query.return_value.result_rows = [[12]]
+    assert total_drafts("demo", client=client) == 12

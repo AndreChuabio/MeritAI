@@ -87,3 +87,46 @@ def count_posted(user_id: str, client: Any | None = None) -> int:
         parameters={"u": user_id},
     )
     return int(result.result_rows[0][0])
+
+
+def total_drafts(user_id: str, client: Any | None = None) -> int:
+    """Count of all draft-generated events for a user (posted or not)."""
+    client = client or get_client()
+    result = client.query(
+        "SELECT count() FROM outreach_log WHERE user_id = {u:String}",
+        parameters={"u": user_id},
+    )
+    return int(result.result_rows[0][0])
+
+
+def count_by_channel(user_id: str, client: Any | None = None) -> dict[str, int]:
+    """Return {channel: count} for every channel the user has used."""
+    client = client or get_client()
+    result = client.query(
+        "SELECT channel, count() AS n FROM outreach_log "
+        "WHERE user_id = {u:String} GROUP BY channel ORDER BY n DESC",
+        parameters={"u": user_id},
+    )
+    return {row[0]: int(row[1]) for row in result.result_rows}
+
+
+def count_by_purpose(user_id: str, client: Any | None = None) -> dict[str, int]:
+    """Return {purpose: count} across all drafts for a user."""
+    client = client or get_client()
+    result = client.query(
+        "SELECT purpose, count() AS n FROM outreach_log "
+        "WHERE user_id = {u:String} GROUP BY purpose ORDER BY n DESC",
+        parameters={"u": user_id},
+    )
+    return {row[0]: int(row[1]) for row in result.result_rows}
+
+
+def drafts_by_day(user_id: str, client: Any | None = None) -> list[dict]:
+    """Return [{'date': 'YYYY-MM-DD', 'count': n}, ...] for the user's drafts."""
+    client = client or get_client()
+    result = client.query(
+        "SELECT toDate(ts) AS d, count() AS n FROM outreach_log "
+        "WHERE user_id = {u:String} GROUP BY d ORDER BY d",
+        parameters={"u": user_id},
+    )
+    return [{"date": str(row[0]), "count": int(row[1])} for row in result.result_rows]

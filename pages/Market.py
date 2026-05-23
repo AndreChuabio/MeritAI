@@ -1,20 +1,16 @@
-"""Outreach workflow — Streamlit multipage entry.
+"""Market — Senso brand sync + purpose-driven draft generation.
 
-Auto-discovered by Streamlit when `streamlit run app.py` finds this file
-under `pages/`. Does NOT modify `app.py` — kept isolated so main-branch
-work on the PaperPilot pipeline does not merge-conflict here.
+Separate Streamlit sidebar page. Two sub-tabs:
+  1. Brand    — sync Senso Brand Kit + mirror to ClickHouse user_profile
+  2. Generate — purpose picker -> Senso content generation -> draft cards
 
-Three internal sub-tabs:
-  1. Brand   — sync Senso Brand Kit + mirror to ClickHouse user_profile
-  2. Outreach — purpose picker -> Senso content generation -> draft cards
-  3. Track   — Scholar (Nimble live or mock) + Senso citations + drafts
+The visa-progress dashboard lives on its own `Track` page next door.
 """
 
 from __future__ import annotations
 
 import os
 
-import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -23,18 +19,17 @@ from paperpilot.outreach import log as outreach_log
 from paperpilot.outreach.log import UserProfile, upsert_user_profile
 from paperpilot.outreach.orchestrator import generate_drafts
 from paperpilot.outreach.purpose import Purpose
-from paperpilot.outreach.scholar import O1_THRESHOLD, fetch as fetch_scholar
 from paperpilot.outreach.senso import Senso, SensoAPIError
 
 
 load_dotenv()
 
 
-st.set_page_config(page_title="Outreach — PaperPilot", page_icon="📣", layout="wide")
-st.title("📣 Outreach")
+st.set_page_config(page_title="Market — Outreach Drafts", page_icon="📣", layout="wide")
+st.title("📣 Market")
 st.caption(
-    "Senso-backed brand sync, purpose-driven drafts, and a visa-progress dashboard. "
-    "Drafts powered by **Senso** · Scholar live-fetch via **Nimble**."
+    "Senso-backed brand sync + purpose-driven draft generation. "
+    "Drafts powered by **Senso**. See your visa progress on the **Track** page."
 )
 
 
@@ -46,7 +41,7 @@ if not _HAS_SENSO_KEY:
     )
 
 
-tab_brand, tab_outreach, tab_track = st.tabs(["Brand", "Outreach", "Track"])
+tab_brand, tab_generate = st.tabs(["Brand", "Generate"])
 
 
 # =========================================================================
@@ -120,7 +115,6 @@ with tab_brand:
         except Exception as e:  # noqa: BLE001
             st.caption(f"(ClickHouse mirror skipped: {e})")
 
-        # Persist into session_state so tab switches do not clear the form.
         st.session_state["brand_name"] = name
         st.session_state["brand_title"] = title
         st.session_state["brand_about"] = about
@@ -140,9 +134,9 @@ with tab_brand:
 
 
 # =========================================================================
-# Outreach tab — purpose -> Senso drafts
+# Generate tab — purpose -> Senso drafts
 # =========================================================================
-with tab_outreach:
+with tab_generate:
     st.subheader("Outreach Drafts")
     st.caption("Pick a purpose; Senso writes the cards.")
 
@@ -151,7 +145,7 @@ with tab_outreach:
         options=[p.value for p in Purpose],
         horizontal=True,
         captions=[
-            "Extraordinary-ability dossier (O-1)",
+            "Extraordinary-ability dossier (O-1 / NIW)",
             "Networking / mentorship",
             "Personal brand building",
             "Sell a service or product",
@@ -204,68 +198,3 @@ with tab_outreach:
             except Exception:
                 pass  # CH mirror is best-effort
             st.toast(f"Posted to {card.channel} ✓ (demo)")
-
-
-# =========================================================================
-# Track tab — Scholar + Senso citations + composite score
-# =========================================================================
-with tab_track:
-    st.subheader("Visa Progress Dashboard")
-
-    scholar_url_for_fetch = st.session_state.get("brand_scholar") or None
-    scholar = fetch_scholar(scholar_url_for_fetch)
-
-    try:
-        posted = outreach_log.count_posted("demo")
-    except Exception:
-        posted = 0
-
-    senso_owned_total = 0
-    senso_external_total = 0
-    drafts: list[dict] = []
-    if _HAS_SENSO_KEY:
-        try:
-            s = Senso.from_env()
-            senso_owned_total = s.citation_trends("owned").get("total", 0)
-            senso_external_total = s.citation_trends("external").get("total", 0)
-            drafts = s.list_drafts(limit=5)
-        except SensoAPIError:
-            pass
-
-    score = (
-        0.4 * min(scholar.total_citations / O1_THRESHOLD, 1.0)
-        + 0.3 * min((senso_owned_total + senso_external_total) / 100.0, 1.0)
-        + 0.3 * min(posted / 25.0, 1.0)
-    ) * 100
-
-    st.metric("Extraordinary Ability score", f"{score:.0f} / 100")
-    st.progress(score / 100)
-
-    col_a, col_b, col_c = st.columns(3)
-
-    with col_a:
-        st.markdown("**Academic citations (Scholar)**")
-        st.metric(
-            f"{scholar.total_citations} / {O1_THRESHOLD}",
-            f"h-index {scholar.h_index}",
-        )
-        st.progress(scholar.progress_to_o1())
-        if scholar.by_month:
-            df = pd.DataFrame(scholar.by_month)
-            st.line_chart(df, x="date", y="count", height=160)
-        st.caption("≥20 citations is widely cited as the O-1 threshold.")
-
-    with col_b:
-        st.markdown("**AI citations (Senso)**")
-        st.metric("Owned", senso_owned_total)
-        st.metric("External", senso_external_total)
-        st.caption("How often ChatGPT, Perplexity, Claude cite your work.")
-
-    with col_c:
-        st.markdown("**Drafts published**")
-        st.metric("This workspace", posted)
-        for d in drafts:
-            title = (d.get("seo_title") or d.get("raw_markdown") or d.get("id", ""))
-            st.write(f"- {str(title)[:80]}")
-        if not drafts and _HAS_SENSO_KEY:
-            st.caption("No drafts yet — generate one from the Outreach tab.")
