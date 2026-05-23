@@ -50,6 +50,28 @@ def upsert_user_profile(profile: UserProfile, client: Any | None = None) -> None
     client.insert("user_profile", [row], column_names=_USER_PROFILE_COLS)
 
 
+def find_user_profile_by_name(name: str, client: Any | None = None) -> UserProfile | None:
+    """Look up a saved profile by exact name match (case-insensitive)."""
+    client = client or get_client()
+    result = client.query(
+        "SELECT user_id, name, title, about, voice_tone, github_url, "
+        "linkedin_url, scholar_url, site_url, resume_text "
+        "FROM user_profile FINAL "
+        "WHERE lower(name) = lower({n:String}) "
+        "ORDER BY updated_at DESC LIMIT 1",
+        parameters={"n": name},
+    )
+    rows = result.result_rows
+    if not rows:
+        return None
+    r = rows[0]
+    return UserProfile(
+        user_id=r[0], name=r[1], title=r[2], about=r[3],
+        voice_tone=r[4], github_url=r[5], linkedin_url=r[6],
+        scholar_url=r[7], site_url=r[8], resume_text=r[9],
+    )
+
+
 def log_generate(
     user_id: str,
     purpose: str,

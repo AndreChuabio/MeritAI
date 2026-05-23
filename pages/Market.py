@@ -16,7 +16,11 @@ from dotenv import load_dotenv
 
 from paperpilot import trace
 from paperpilot.outreach import log as outreach_log
-from paperpilot.outreach.log import UserProfile, upsert_user_profile
+from paperpilot.outreach.log import (
+    UserProfile,
+    upsert_user_profile,
+    find_user_profile_by_name,
+)
 from paperpilot.outreach.orchestrator import generate_drafts
 from paperpilot.outreach.purpose import Purpose
 from paperpilot.outreach.senso import Senso, SensoAPIError
@@ -63,8 +67,40 @@ tab_brand, tab_generate = st.tabs(["Personal Brand", "Generate"])
 # Personal Brand tab — user-facing profile (Senso under the hood)
 # =========================================================================
 with tab_brand:
-    st.subheader("Build Your Profile")
-    st.caption("Define your voice, story, and links. We use this to draft every outreach.")
+    # Top-right "Load My Profile" search (first + last name)
+    header_l, header_r = st.columns([3, 2])
+    with header_l:
+        st.subheader("Build Your Profile")
+        st.caption("Define your voice, story, and links. We use this to draft every outreach.")
+    with header_r:
+        st.markdown("**Already have a profile?**")
+        load_c1, load_c2, load_c3 = st.columns([2, 2, 1])
+        load_first = load_c1.text_input("First name", key="load_first", label_visibility="collapsed", placeholder="First")
+        load_last = load_c2.text_input("Last name", key="load_last", label_visibility="collapsed", placeholder="Last")
+        if load_c3.button("Load My Profile", disabled=not _HAS_SENSO_KEY, use_container_width=True):
+            full = f"{load_first.strip()} {load_last.strip()}".strip()
+            if not full:
+                st.warning("Enter a first and last name.")
+            else:
+                try:
+                    p = find_user_profile_by_name(full)
+                except Exception as e:  # noqa: BLE001
+                    p = None
+                    st.error(f"Lookup failed: {e}")
+                if p is None:
+                    st.warning(f"No profile found for '{full}'.")
+                else:
+                    st.session_state["brand_name"] = p.name
+                    st.session_state["brand_title"] = p.title
+                    st.session_state["brand_about"] = p.about
+                    st.session_state["brand_voice"] = p.voice_tone
+                    st.session_state["brand_github"] = p.github_url
+                    st.session_state["brand_linkedin"] = p.linkedin_url
+                    st.session_state["brand_scholar"] = p.scholar_url
+                    st.session_state["brand_site"] = p.site_url
+                    st.session_state["brand_resume"] = p.resume_text
+                    st.success(f"Loaded profile for {p.name} ✓")
+                    st.rerun()
 
     col_l, col_r = st.columns(2)
     name = col_l.text_input("Name", value=st.session_state.get("brand_name", "Nikki"))
@@ -108,20 +144,29 @@ with tab_brand:
         height=160,
     )
 
-    col_sync, col_load = st.columns([1, 1])
-    if col_sync.button("Save My Profile", type="primary", disabled=not _HAS_SENSO_KEY):
+    if st.button("Save My Profile", type="primary", disabled=not _HAS_SENSO_KEY):
+        # Senso brand-kit `guidelines` is strictly-typed; bake links + title
+        # into the description so the drafter can still see them.
+        links_block = "\n".join(filter(None, [
+            f"GitHub: {github_url}" if github_url else "",
+            f"LinkedIn: {linkedin_url}" if linkedin_url else "",
+            f"Google Scholar: {scholar_url}" if scholar_url else "",
+            f"Site: {site_url}" if site_url else "",
+        ]))
+        description = "\n\n".join(filter(None, [
+            f"Role: {title}" if title else "",
+            about.strip(),
+            resume_text.strip(),
+            links_block,
+        ]))
+        rules: list[str] = [r.strip() for r in voice.replace("\n", ",").split(",") if r.strip()]
         payload = {
             "brand_name": name,
-            "brand_description": f"{about}\n\n{resume_text}".strip(),
+            "brand_description": description,
             "voice_and_tone": voice,
             "guidelines": {
-                "title": title,
-                "links": {
-                    "github":   github_url,
-                    "linkedin": linkedin_url,
-                    "scholar":  scholar_url,
-                    "site":     site_url,
-                },
+                "author_persona": title or "",
+                "global_writing_rules": rules,
             },
         }
         try:
@@ -130,17 +175,18 @@ with tab_brand:
         except SensoAPIError as e:
             st.error(f"Save failed: {e}")
 
-        # Mirror into ClickHouse user_profile (best-effort).
+        # Mirror into ClickHouse user_profile so the Load search can find it.
+        user_id_slug = "_".join(name.lower().split()) or "demo"
         try:
             upsert_user_profile(UserProfile(
-                user_id="demo",
+                user_id=user_id_slug,
                 name=name, title=title, about=about, voice_tone=voice,
                 github_url=github_url, linkedin_url=linkedin_url,
                 scholar_url=scholar_url, site_url=site_url,
                 resume_text=resume_text,
             ))
         except Exception as e:  # noqa: BLE001
-            st.caption(f"(ClickHouse mirror skipped: {e})")
+            st.caption(f"(Profile-store mirror skipped: {e})")
 
         st.session_state["brand_name"] = name
         st.session_state["brand_title"] = title
@@ -151,13 +197,6 @@ with tab_brand:
         st.session_state["brand_scholar"] = scholar_url
         st.session_state["brand_site"] = site_url
         st.session_state["brand_resume"] = resume_text
-
-    if col_load.button("Load My Profile", disabled=not _HAS_SENSO_KEY):
-        try:
-            kit = Senso.from_env().get_brand_kit()
-            st.json(kit)
-        except SensoAPIError as e:
-            st.error(f"Load failed: {e}")
 
 
 # =========================================================================

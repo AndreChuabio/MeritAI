@@ -4,6 +4,7 @@ from paperpilot.outreach.log import (
     log_generate,
     mark_posted,
     upsert_user_profile,
+    find_user_profile_by_name,
     count_posted,
     count_by_channel,
     count_by_purpose,
@@ -109,3 +110,23 @@ def test_total_drafts_returns_int():
     client = MagicMock()
     client.query.return_value.result_rows = [[12]]
     assert total_drafts("demo", client=client) == 12
+
+
+def test_find_user_profile_by_name_hit():
+    client = MagicMock()
+    client.query.return_value.result_rows = [(
+        "nikki_hu", "Nikki Hu", "Software Engineer", "Bio",
+        "professional", "https://github.com/huhu42",
+        "https://linkedin.com/in/nikkihu", "", "", "",
+    )]
+    p = find_user_profile_by_name("nikki hu", client=client)
+    assert p is not None
+    assert p.user_id == "nikki_hu"
+    assert p.name == "Nikki Hu"
+    assert p.github_url == "https://github.com/huhu42"
+
+
+def test_find_user_profile_by_name_miss():
+    client = MagicMock()
+    client.query.return_value.result_rows = []
+    assert find_user_profile_by_name("ghost", client=client) is None
