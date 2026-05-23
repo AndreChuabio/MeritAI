@@ -1,12 +1,16 @@
 .PHONY: dev dev-traced seed fetch-arxiv ping precompute meta clean push
 
-# Run Streamlit locally with Lapdog wrap + Datadog cloud forward.
-dev:
-	DD_API_KEY=$$DD_API_KEY lapdog streamlit run app.py
-
-# Same as dev but without the cloud forward (local Lapdog dashboard only).
+# Run Streamlit locally with Lapdog wrap. The venv path is explicit so
+# Lapdog finds OUR streamlit (which has ddtrace) -- a bare `streamlit`
+# would resolve to system anaconda's copy.
 dev-local:
-	lapdog streamlit run app.py
+	lapdog .venv/bin/streamlit run app.py
+
+# Run with Datadog cloud forward as well (LLM Obs trace lands in DD cloud).
+# Streamlit loads .env via load_dotenv(); the agentless flag makes ddtrace
+# ship directly bypassing Lapdog's port-8126 contention.
+dev:
+	DD_LLMOBS_AGENTLESS_ENABLED=1 lapdog .venv/bin/streamlit run app.py
 
 # Run Streamlit raw, no Lapdog -- for debugging the UI without telemetry.
 dev-raw:
@@ -33,7 +37,7 @@ ping:
 # port 8126) intercepts the trace and never forwards it to cloud.
 ping-cloud:
 	DD_LLMOBS_AGENTLESS_ENABLED=1 \
-	  uv run ddtrace-run python -c "from dotenv import load_dotenv; load_dotenv(); from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session()))"
+	  uv run --env-file .env ddtrace-run python -c "from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session()))"
 
 # Pre-compute the demo repo's pipeline output for DEMO_MODE fallback.
 # Usage: make precompute URL=https://github.com/owner/repo
