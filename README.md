@@ -13,10 +13,10 @@ PaperPilot turns a GitHub repository into a venue-targeted academic paper draft:
 1. **Ingest.** Pulls the README, file tree, and a ranked sample of source files from any GitHub repo. Concatenates into a single bundle under a 600K-token cap.
 2. **Summarize.** Sends the bundle to Gemini through Vercel AI Gateway (1M-context window). Gets back a structured `ResearchSummary`: problem, contribution, method, results, limitations, keywords.
 3. **Match.** Embeds the summary and ranks 41 hand-curated CFPs (NeurIPS, ICLR, ICML, ACL, EMNLP, KDD, CVPR, ML4H, MICCAI, CHIL, AMIA, workshops, journals) in ClickHouse Cloud by semantic fit + deadline proximity.
-4. **Draft.** Streams a paper section-by-section through Claude: abstract, intro, related work, method. The related-work section is citation-grounded — the model can only cite arxiv IDs returned by a pre-filter + tool-call gate. Any unsanctioned `[arxiv:...]` marker is stripped post-hoc.
+4. **Draft.** Streams a paper section-by-section through Claude: abstract, intro, related work, method. The related-work section is citation-grounded — the model is given a pre-filtered list of arxiv candidates from ClickHouse and a strict "cite ONLY these" instruction. Any unsanctioned `[arxiv:...]` marker is stripped post-hoc with a visible warning.
 5. **Export.** Downloads as LaTeX + BibTeX, ready to open in Overleaf.
 
-Every LLM call and tool call is captured by **Lapdog** (Datadog's local LLM-observability CLI) and forwarded to Datadog cloud with one env var.
+Every LLM call is captured by **Lapdog** (Datadog's local LLM-observability CLI) and forwarded to Datadog cloud with one env var. The UI also surfaces a live **cost + token pill** on every run: $X.XXXX spent, N tokens in / out, summed across Gemini ingest and all four Claude draft sections.
 
 ---
 
@@ -41,18 +41,42 @@ Every LLM call and tool call is captured by **Lapdog** (Datadog's local LLM-obse
 | Layer | Stack | Sponsor |
 |-------|-------|---------|
 | LLM telemetry | Lapdog local + Datadog cloud forward | Datadog |
-| Long-context ingest | Gemini 2.5 via AI Gateway | DeepMind |
-| Drafting | Claude Sonnet 4.6 via AI Gateway | Vercel AI Gateway |
+| Long-context ingest | Gemini 2.5 Flash via AI Gateway | DeepMind |
+| Drafting | Claude Sonnet 4.6 streamed via AI Gateway | Vercel AI Gateway |
 | Vector search + audit log | ClickHouse Cloud | ClickHouse |
-| Citation grounding | arxiv API + ClickHouse pre-filter | (anti-hallucination) |
+| Cost + token accounting | `tiktoken` fallback + per-model price table | (observability) |
+| Citation grounding | arxiv API + ClickHouse pre-filter + post-hoc strip | (anti-hallucination) |
 | Demo venue | ML4H 2026 | (clinical-ML authenticity) |
+
+---
+
+## Observability
+
+Every LLM call in PaperPilot is wrapped by `trace.step(...)` in `paperpilot/trace.py`, which records a `.start` and `.end` event into:
+
+- An **in-process buffer** keyed by `session_id`, drained by the Streamlit right rail.
+- **ClickHouse** `trace_log` table (best-effort; never fails the user-facing run).
+- **Lapdog** locally + **Datadog LLM Observability** when `DD_LLMOBS_AGENTLESS_ENABLED=1` is set.
+
+Each `.end` event payload carries `tokens_in`, `tokens_out`, `cost_usd`, `dur_ms`, and a `cost_source: "gateway" | "estimated"` discriminator.
+
+### Cost + token capture
+
+We learned mid-build that the Vercel AI Gateway does not reliably propagate `usage` on streamed Anthropic responses — even with `stream_options={"include_usage": True}` set. So `paperpilot/draft.py` implements a graceful fallback:
+
+1. Prefer real `usage.prompt_tokens` / `usage.completion_tokens` / `usage.cost` from the final stream chunk when the Gateway returns it.
+2. Fall back to a local `tiktoken` (cl100k_base) count of `sys_prompt + user_prompt` for input tokens, and the accumulated stream for output tokens.
+3. Estimate cost from a small per-million-token price table (`_PRICE_PER_MTOK`) keyed by model prefix.
+4. Tag every event with `cost_source` so the UI pill can show `(est.)` honestly when estimation was used.
+
+The session pill at the top of the Agent trace panel sums `tokens_in`, `tokens_out`, and `cost_usd` across every `.end` event in the current session — including ingest, citation candidates, venue match, and all four drafted sections. A full nanoGPT-scale run costs roughly **$0.01** end-to-end.
 
 ---
 
 ## Quickstart
 
 ```bash
-# 0. Prereqs: macOS, uv, brew, gh CLI, Vercel CLI.
+# 0. Prereqs: macOS, uv, brew, gh CLI. (Vercel AI Gateway is HTTPS-only -- no CLI needed.)
 
 # 1. Install dependencies
 uv sync
@@ -60,7 +84,8 @@ brew install datadog/lapdog/lapdog
 
 # 2. Configure
 cp .env.example .env
-# Fill in: AI_GATEWAY_API_KEY, DD_API_KEY, CLICKHOUSE_*
+# Required: AI_GATEWAY_API_KEY, CLICKHOUSE_HOST/USER/PASSWORD
+# Optional: DD_API_KEY, DD_SITE, DD_LLMOBS_ENABLED=1, DD_LLMOBS_ML_APP for cloud forward
 
 # 3. Seed corpora into ClickHouse (CFPs + arxiv embeddings)
 make seed
@@ -69,10 +94,17 @@ make seed
 make dev
 # -> http://localhost:8501  (Streamlit UI)
 # -> http://localhost:8126  (Lapdog dashboard)
-# -> Datadog APM (cloud) shows the same session via DD_API_KEY forward
+# -> Datadog LLM Observability (cloud) via DD_LLMOBS_AGENTLESS_ENABLED=1 forward
 ```
 
-`make ping` runs a minimum hello-world LLM call to verify the wires before launching the full UI.
+### Demo flows on the Streamlit UI
+
+- **Pipeline tab.** Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). "Ingest + match venues" runs the full Gemini summary + ClickHouse venue ranking. Pick a venue → live streamed Claude draft with the cost pill climbing in the right rail.
+- **Load demo cache.** Falls back to a precomputed `data/demo_cache.json` snapshot. Drips synthetic trace events with realistic timings (~6s total) so the agent appears to work even on a flaky network — paper draft + venue card + full trace land instantly afterward.
+- **Phase 1 hello-world tab.** One-button `make ping` equivalent. Single LLM round-trip to verify Gateway + Lapdog + Datadog wires are alive before doing a real run.
+
+`make ping` runs the same hello-world call from the command line.
+`make precompute URL=https://github.com/owner/repo` refreshes the demo cache.
 
 ---
 
@@ -87,12 +119,12 @@ agentichack/
     embed.py                      text-embedding-3-small via Gateway
     clickhouse_client.py          schema + trace_log helpers
     cfp_match.py                  cosineDistance venue ranking
-    arxiv_lookup.py               citation candidate pre-filter + tool
-    draft.py                      section-by-section streaming + citation gate
+    arxiv_lookup.py               citation candidate pre-filter (ClickHouse + arxiv)
+    draft.py                      section streaming + citation strip + tiktoken/cost fallback
     latex_export.py               .tex + .bib assembly
-    pipeline.py                   end-to-end orchestrator
-    trace.py                      log_event + step context manager
-    gateway.py                    Vercel AI Gateway client
+    pipeline.py                   end-to-end orchestrator + demo cache writer (totals rolled up)
+    trace.py                      log_event + step context manager + in-process buffer
+    gateway.py                    Vercel AI Gateway client (model strings encode provider)
     llm_ping.py                   Phase 1 hello-world helper
   data/
     cfp_seed.json                 41 hand-curated CFPs
@@ -110,13 +142,12 @@ agentichack/
 
 ## Citation grounding
 
-Three layers of defense against hallucinated citations in the related-work section:
+Two layers of defense against hallucinated citations in the related-work section:
 
-1. **Candidate pre-filter (ClickHouse).** Embed the repo summary, fetch the top-10 closest arxiv IDs from the corpus. The model sees only these as approved citations.
-2. **Tool gate.** The drafter must call `lookup_paper(arxiv_id)` to read any candidate before citing it.
-3. **Post-hoc strip.** Regex `\[arxiv:([^\]]+)\]` scans the output; any ID not in the approved + looked-up set is removed and the sentence flagged.
+1. **Candidate pre-filter (ClickHouse).** Embed the repo summary, fetch the top-10 closest arxiv IDs from the corpus by cosine distance. Only those IDs appear in the prompt; the model is instructed to cite ONLY from that list.
+2. **Post-hoc strip.** After streaming, regex `\[arxiv:([^\]]+)\]` scans the output; any ID not in the approved set is removed and surfaced in the UI as a "stripped N unapproved citations" warning. Surviving citations are resolved through the in-process `_CACHE` first, falling back to the live arxiv API for BibTeX enrichment.
 
-Result: zero hallucinated citations even if the model tries.
+Result: zero hallucinated citations make it into the final paper. The visible warning when the model attempts an unsanctioned cite is itself a feature — judges can see the gate firing.
 
 ---
 

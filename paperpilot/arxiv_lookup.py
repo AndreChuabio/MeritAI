@@ -1,14 +1,20 @@
 """arxiv citation grounding.
 
-Two layers of defense against citation hallucination:
+Two layers of defense against citation hallucination in the related-work
+section:
 
   1. Candidate pre-filter via ClickHouse: pull the top-N arxiv IDs whose
      embeddings are closest to the repo summary. These are the only IDs
-     the drafter is allowed to cite.
-  2. Tool gate: when drafting related work, the LLM must call
-     `lookup_paper(arxiv_id)` to read each candidate before citing.
+     surfaced in the prompt, and the system prompt is explicit that the
+     model may cite ONLY from this list.
+  2. Post-hoc strip in `draft.py`: regex extracts every `[arxiv:id]`
+     marker from the streamed output and drops any ID not in the approved
+     set. Stripped IDs are surfaced in the UI as a warning.
 
-Both layers are belt-and-suspenders; either alone would catch most cases.
+`lookup_paper(arxiv_id)` is NOT exposed to the model as a tool call -- it
+runs server-side after the draft to enrich surviving citations into
+PaperMeta records for BibTeX. The in-process `_CACHE` short-circuits the
+flaky arxiv API for any ID already pulled from ClickHouse.
 """
 
 from __future__ import annotations
