@@ -11,8 +11,7 @@ this orchestrator is also used by:
 from __future__ import annotations
 
 import json
-import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -37,10 +36,6 @@ class PipelineResult:
     sections: dict[str, DraftSection]
     tex: str
     bib: str
-
-
-def _is_demo_mode() -> bool:
-    return os.environ.get("DEMO_MODE", "").lower() == "true"
 
 
 def ingest_and_match(url: str, session_id: str) -> tuple[RepoBundle, ResearchSummary, list[VenueMatch]]:
@@ -106,6 +101,12 @@ def write_demo_cache(url: str) -> Path:
     except StopIteration as stop:
         sections = stop.value
     tex, bib = export_paper(summary, venue, sections)
+    # Roll up totals from the trace buffer so demo mode can flash realistic
+    # numbers without re-running any LLM call.
+    events = trace.buffered_events(sid)
+    t_in = sum((e.payload.get("tokens_in") or 0) for e in events if e.kind.endswith(".end"))
+    t_out = sum((e.payload.get("tokens_out") or 0) for e in events if e.kind.endswith(".end"))
+    cost_usd = sum((e.payload.get("cost_usd") or 0.0) for e in events if e.kind.endswith(".end"))
     snapshot = {
         "session_id": sid,
         "url": url,
@@ -123,6 +124,7 @@ def write_demo_cache(url: str) -> Path:
         },
         "tex": tex,
         "bib": bib,
+        "totals": {"tokens_in": t_in, "tokens_out": t_out, "cost_usd": cost_usd},
     }
     DEMO_CACHE.write_text(json.dumps(snapshot, indent=2, default=str))
     return DEMO_CACHE
