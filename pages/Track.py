@@ -14,6 +14,7 @@ import os
 from typing import Dict, List
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -41,6 +42,21 @@ except Exception as exc:  # noqa: BLE001 - module may not exist yet during paral
     delete_evidence = None  # type: ignore[assignment]
     evidence_by_criterion = None  # type: ignore[assignment]
     _EVIDENCE_IMPORT_ERROR = str(exc)
+
+try:
+    from paperpilot.outreach.evidence_draft import draft_criterion_narrative
+    _EVIDENCE_DRAFT_IMPORT_ERROR: str | None = None
+except Exception as exc:  # noqa: BLE001 - module may not exist yet during parallel build
+    draft_criterion_narrative = None  # type: ignore[assignment]
+    _EVIDENCE_DRAFT_IMPORT_ERROR = str(exc)
+
+try:
+    from paperpilot.outreach.dossier import build_dossier, dossier_filename
+    _DOSSIER_IMPORT_ERROR: str | None = None
+except Exception as exc:  # noqa: BLE001 - module may not exist yet during parallel build
+    build_dossier = None  # type: ignore[assignment]
+    dossier_filename = None  # type: ignore[assignment]
+    _DOSSIER_IMPORT_ERROR = str(exc)
 
 
 load_dotenv()
@@ -217,6 +233,62 @@ tabs = st.tabs(["Dashboard", "Evidence Ledger"])
 # Tab 1: Dashboard (existing content, gauges demoted)
 # -------------------------------------------------------------------------
 with tabs[0]:
+    # Scholar transparency banner - only shown when live fetch fell back to seed.
+    if scholar.source == "mock_fallback":
+        st.warning(
+            scholar.error
+            or "Live Google Scholar fetch failed. Showing seeded sample data."
+        )
+
+    # Dossier export - two-step build then download (Streamlit cannot do
+    # single-click download for dynamically generated content).
+    if _DOSSIER_IMPORT_ERROR is not None:
+        st.caption(
+            "Dossier export not deployed yet - "
+            "paperpilot.outreach.dossier will activate this once shipped."
+        )
+    else:
+        dcol_build, dcol_dl = st.columns([1, 1])
+        with dcol_build:
+            if st.button(
+                "Build O-1A dossier (PDF)",
+                key="build_dossier_btn",
+                use_container_width=True,
+                help=(
+                    "Drafts narratives for all 8 USCIS criteria and packages "
+                    "them into a single PDF. Calls the model 8 times - takes "
+                    "around 30 seconds."
+                ),
+            ):
+                with st.spinner(
+                    "Building dossier - this calls the model 8 times. "
+                    "Takes around 30 seconds."
+                ):
+                    try:
+                        st.session_state["dossier_pdf"] = build_dossier(user_id)
+                        st.session_state["dossier_filename"] = dossier_filename(
+                            user_id,
+                            user_name=st.session_state.get("user_name"),
+                        )
+                    except RuntimeError as exc:
+                        st.error(f"Dossier build failed: {exc}")
+                        st.session_state.pop("dossier_pdf", None)
+                        st.session_state.pop("dossier_filename", None)
+        with dcol_dl:
+            if "dossier_pdf" in st.session_state:
+                st.download_button(
+                    label="Download O-1A dossier (PDF)",
+                    data=st.session_state["dossier_pdf"],
+                    file_name=st.session_state.get(
+                        "dossier_filename", "o1a_dossier.pdf"
+                    ),
+                    mime="application/pdf",
+                    key="download_dossier_btn",
+                    use_container_width=True,
+                )
+            else:
+                st.caption("Build the dossier to enable download.")
+
     st.caption(
         "Auto-derived heuristics from Scholar, Senso, and outreach data. "
         "Not USCIS-official - declare evidence in the Ledger tab for the real count."
@@ -302,10 +374,41 @@ with tabs[0]:
 
     st.divider()
 
-    st.subheader("Citation trajectory")
-    if scholar.by_month:
-        df = pd.DataFrame(scholar.by_month)
-        st.line_chart(df, x="date", y="count", height=240)
+    # Citation trajectory: prefer cumulative by_year (live path); fall back to
+    # by_month (mock seed); hide the chart entirely when both are empty.
+    _has_year = bool(scholar.by_year)
+    _has_month = bool(scholar.by_month)
+    if _has_year or _has_month:
+        st.subheader("Citations over time (cumulative)")
+        if _has_year:
+            x_vals = [str(year) for year, _ in scholar.by_year]
+            y_vals = [count for _, count in scholar.by_year]
+            x_title = "Year"
+        else:
+            x_vals = [row["date"] for row in scholar.by_month]
+            y_vals = [row["count"] for row in scholar.by_month]
+            x_title = "Month"
+        fig = go.Figure(
+            data=[
+                go.Scatter(
+                    x=x_vals,
+                    y=y_vals,
+                    mode="lines+markers",
+                    line=dict(color="#22c55e", width=2),
+                    marker=dict(size=6),
+                    hovertemplate="%{x}: %{y} citations<extra></extra>",
+                )
+            ]
+        )
+        fig.update_layout(
+            height=240,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_title=x_title,
+            yaxis_title="Cumulative citations",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig, use_container_width=True)
     st.caption(
         f"Currently {scholar.total_citations} / {O1_THRESHOLD} academic citations. "
         ">=20 is widely cited as the bar for the O-1 original-contributions prong."
@@ -385,6 +488,43 @@ with tabs[1]:
                         "No evidence declared yet for this criterion. "
                         "Add your first item below."
                     )
+
+                # Per-criterion narrative drafter (streams LLM output).
+                if _EVIDENCE_DRAFT_IMPORT_ERROR is not None:
+                    st.caption(
+                        "Narrative drafter not deployed yet - "
+                        "paperpilot.outreach.evidence_draft will enable this."
+                    )
+                else:
+                    narrative_btn_key = f"draft_narrative_{key}"
+                    narrative_state_key = f"narrative_text_{key}"
+                    has_items = n >= 1
+                    if st.button(
+                        "Draft narrative",
+                        key=narrative_btn_key,
+                        disabled=not has_items,
+                        help=(
+                            "Declare evidence first"
+                            if not has_items
+                            else "Stream a petition-ready narrative for this criterion."
+                        ),
+                    ):
+                        try:
+                            with st.spinner("Drafting..."):
+                                stream = draft_criterion_narrative(
+                                    user_id,
+                                    key,
+                                    session_id=st.session_state.get("session_id"),
+                                )
+                                drafted = st.write_stream(stream)
+                            # Persist for this run only so the user can re-read
+                            # the streamed text after rerender. Not saved to DB
+                            # per contract - regenerated for PDF export.
+                            st.session_state[narrative_state_key] = drafted
+                        except RuntimeError as exc:
+                            st.error(f"Narrative draft failed: {exc}")
+                    elif st.session_state.get(narrative_state_key):
+                        st.info(st.session_state[narrative_state_key])
 
                 # Add-evidence form
                 show_form_key = f"show_form_{key}"
