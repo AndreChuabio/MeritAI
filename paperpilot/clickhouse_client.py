@@ -139,6 +139,23 @@ SCHEMA_SQL = [
         posted UInt8
     ) ENGINE = MergeTree ORDER BY (ts, user_id)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS o1_evidence (
+        id String,
+        user_id String,
+        criterion String,
+        title String,
+        description String,
+        evidence_url String DEFAULT '',
+        evidence_date Date DEFAULT toDate('1970-01-01'),
+        declared_at DateTime DEFAULT now(),
+        status String DEFAULT 'draft',
+        metadata String DEFAULT '{}',
+        deleted UInt8 DEFAULT 0,
+        updated_at DateTime DEFAULT now()
+    ) ENGINE = ReplacingMergeTree(updated_at)
+    ORDER BY (user_id, criterion, id)
+    """,
 ]
 
 
