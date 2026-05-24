@@ -107,7 +107,7 @@ def main() -> None:
     if not senso_client.is_configured():
         print("SENSO_API_KEY not set. Skipping.")
         sys.exit(1)
-    sid = new_session()
+    sid = new_session("system")
     print(f"Session: {sid}")
     print(f"Ingesting {len(EXEMPLARS)} exemplars into Senso KB...")
     ok = 0

@@ -3,6 +3,10 @@
 This is our redundancy against Lapdog. Every meaningful agent step calls
 log_event(); rows land in ClickHouse trace_log AND we keep them in process
 memory so the Streamlit UI can render them live without round-tripping to CH.
+
+Multi-tenancy: every session is bound to a user_id at creation time.
+Subsequent log_event / step calls automatically attach that user_id to
+trace_log inserts so reads can be filtered per user.
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ import logging
 import os
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from time import time
 from typing import Any, Iterator
 
@@ -39,21 +43,45 @@ class TraceEvent:
 # In-process buffer keyed by session_id so the UI can render without CH round-trip.
 _BUFFER: dict[str, list[TraceEvent]] = {}
 
+# Session-id -> user_id binding established at new_session() time. log_event
+# and step() auto-pull user_id from here so every trace_log row carries the
+# right tenant.
+_SESSION_USER: dict[str, str] = {}
 
-def new_session() -> str:
-    """Generate a session id used to group an end-to-end PaperPilot run."""
-    return f"sess_{uuid.uuid4().hex[:12]}"
+
+def new_session(user_id: str) -> str:
+    """Generate a session id used to group an end-to-end PaperPilot run.
+
+    The user_id is bound to this session id and used for all subsequent
+    log_event / step calls referencing it.
+    """
+    if not user_id:
+        raise ValueError("user_id is required to start a session")
+    sid = f"sess_{uuid.uuid4().hex[:12]}"
+    _SESSION_USER[sid] = user_id
+    return sid
+
+
+def session_user(session_id: str) -> str:
+    """Return the user_id bound to a session, or empty string if unknown."""
+    return _SESSION_USER.get(session_id, "")
 
 
 def log_event(session_id: str, kind: str, payload: dict[str, Any]) -> None:
-    """Record one agent step. Best-effort writes to ClickHouse; never raises."""
+    """Record one agent step. Best-effort writes to ClickHouse; never raises.
+
+    user_id for the trace_log row is resolved from the session binding set
+    by new_session(). Sessions created outside that helper produce rows
+    with an empty user_id (legacy/system path).
+    """
     evt = TraceEvent(session_id=session_id, ts=time(), kind=kind, payload=payload)
     _BUFFER.setdefault(session_id, []).append(evt)
     if not _clickhouse_configured():
         return
+    user_id = _SESSION_USER.get(session_id, "")
     try:
-        insert_trace(session_id, kind, payload)
-    except Exception as exc:  # noqa: BLE001 -- demo path; we never fail the run
+        insert_trace(session_id, user_id, kind, payload)
+    except Exception as exc:  # noqa: BLE001 -- best-effort; never fail the run
         # Surface but don't crash. The buffer still has the event.
         evt.payload.setdefault("_warn", []).append(f"trace_insert_failed: {exc!s}")
 

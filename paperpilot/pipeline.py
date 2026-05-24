@@ -35,6 +35,7 @@ def _clickhouse_configured() -> bool:
 
 
 def save_artifact(
+    user_id: str,
     session_id: str,
     artifact_kind: str,
     artifact_name: str,
@@ -45,9 +46,9 @@ def save_artifact(
 ) -> str | None:
     """Best-effort: persist a generated artifact to ClickHouse + trace_log.
 
-    Returns the sha256 content_hash on success, None on failure. Never raises.
-    The trace_log entry is the demo-visible breadcrumb; the artifact row is
-    the durable blob behind the "Past sessions" sidebar.
+    user_id is required so the durable artifact row is tenant-scoped and
+    the Past Sessions sidebar can filter per user. Returns the sha256
+    content_hash on success, None on failure. Never raises.
     """
     h = hashlib.sha256(content.encode("utf-8")).hexdigest()
     payload = {
@@ -65,6 +66,7 @@ def save_artifact(
     try:
         insert_artifact(
             session_id=session_id,
+            user_id=user_id,
             artifact_kind=artifact_kind,
             artifact_name=artifact_name,
             content=content,
@@ -73,7 +75,7 @@ def save_artifact(
             metadata=metadata,
             content_hash=h,
         )
-    except Exception as exc:  # noqa: BLE001 -- demo path; never fail the user
+    except Exception as exc:  # noqa: BLE001 -- best-effort; never fail the user
         _log.warning("session_artifacts insert failed: %s", exc)
         trace.log_event(
             session_id,
@@ -118,13 +120,16 @@ def draft_for(
     yield from draft_paper(summary, venue, session_id)
 
 
-def stream_full(url: str, session_id: str | None = None) -> Iterator[dict[str, Any]]:
+def stream_full(
+    url: str, user_id: str, session_id: str | None = None
+) -> Iterator[dict[str, Any]]:
     """High-level generator used by the meta-flex / precompute scripts.
 
     Yields dict events describing what happened at each stage; useful for
-    logging and headless runs.
+    logging and headless runs. user_id binds the synthesized session to a
+    tenant when session_id is not provided.
     """
-    sid = session_id or trace.new_session()
+    sid = session_id or trace.new_session(user_id)
     bundle, summary, venues = ingest_and_match(url, sid)
     yield {"stage": "ingest", "summary": summary.model_dump()}
     yield {"stage": "match", "venues": [v.__dict__ for v in venues]}
@@ -143,9 +148,14 @@ def stream_full(url: str, session_id: str | None = None) -> Iterator[dict[str, A
     yield {"stage": "export", "tex_len": len(tex), "bib_len": len(bib)}
 
 
-def write_demo_cache(url: str) -> Path:
-    """Run the pipeline once and serialize for DEMO_MODE."""
-    sid = trace.new_session()
+def write_demo_cache(url: str, user_id: str = "system") -> Path:
+    """Run the pipeline once and serialize for DEMO_MODE.
+
+    user_id defaults to "system" because the demo cache is an admin path
+    not tied to any real tenant; pass a real user_id if invoking from a
+    user-scoped context.
+    """
+    sid = trace.new_session(user_id)
     bundle, summary, venues = ingest_and_match(url, sid)
     if not venues:
         raise RuntimeError(

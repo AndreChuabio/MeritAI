@@ -91,6 +91,7 @@ SCHEMA_SQL = [
     """
     CREATE TABLE IF NOT EXISTS trace_log (
         session_id String,
+        user_id String,
         ts DateTime64(3),
         kind LowCardinality(String),
         payload String
@@ -99,6 +100,7 @@ SCHEMA_SQL = [
     """
     CREATE TABLE IF NOT EXISTS session_artifacts (
         session_id String,
+        user_id String,
         ts DateTime64(3),
         artifact_kind LowCardinality(String),
         repo String,
@@ -149,16 +151,17 @@ def init_schema(client: Client | None = None) -> None:
 
 def insert_trace(
     session_id: str,
+    user_id: str,
     kind: str,
     payload: dict[str, Any],
     client: Client | None = None,
 ) -> None:
-    """Append a single trace event to trace_log."""
+    """Append a single trace event to trace_log, tagged with user_id."""
     client = client or get_client()
     client.insert(
         "trace_log",
-        [[session_id, datetime.now(), kind, json.dumps(payload, default=str)]],
-        column_names=["session_id", "ts", "kind", "payload"],
+        [[session_id, user_id, datetime.now(), kind, json.dumps(payload, default=str)]],
+        column_names=["session_id", "user_id", "ts", "kind", "payload"],
     )
 
 
@@ -182,6 +185,7 @@ def bulk_insert(table: str, rows: Iterable[list[Any]], column_names: list[str]) 
 
 def insert_artifact(
     session_id: str,
+    user_id: str,
     artifact_kind: str,
     artifact_name: str,
     content: str,
@@ -193,8 +197,9 @@ def insert_artifact(
 ) -> None:
     """Append a single generated artifact (paper, plugin, etc.) to session_artifacts.
 
-    Best-effort: caller layer wraps in try/except so a ClickHouse outage
-    never blocks the user's download.
+    Tagged with user_id so the Past Sessions panel can scope to the
+    current user. Best-effort: caller layer wraps in try/except so a
+    ClickHouse outage never blocks the user's download.
     """
     client = client or get_client()
     size = len(content.encode("utf-8"))
@@ -203,6 +208,7 @@ def insert_artifact(
         [
             [
                 session_id,
+                user_id,
                 datetime.now(),
                 artifact_kind,
                 repo,
@@ -216,6 +222,7 @@ def insert_artifact(
         ],
         column_names=[
             "session_id",
+            "user_id",
             "ts",
             "artifact_kind",
             "repo",
@@ -230,26 +237,29 @@ def insert_artifact(
 
 
 def fetch_artifacts(
+    user_id: str,
     session_id: str | None = None,
     artifact_kind: str | None = None,
-    limit: int = 50,
+    limit: int = 15,
     client: Client | None = None,
 ) -> list[dict[str, Any]]:
-    """Return artifact rows (newest first). Filters optional.
+    """Return artifact rows for one user (newest first).
 
-    For the sidebar we typically call with session_id=None to show every
-    run this ClickHouse instance has persisted.
+    user_id is required so the Past Sessions panel never leaks artifacts
+    across tenants. session_id and artifact_kind are optional refinements.
+    Backfilled rows with empty user_id are invisible to any real user
+    filter, which is intentional.
     """
     client = client or get_client()
-    where_parts: list[str] = []
-    params: dict[str, Any] = {"lim": limit}
+    where_parts: list[str] = ["user_id = {uid:String}"]
+    params: dict[str, Any] = {"lim": limit, "uid": user_id}
     if session_id is not None:
         where_parts.append("session_id = {sid:String}")
         params["sid"] = session_id
     if artifact_kind is not None:
         where_parts.append("artifact_kind = {kind:String}")
         params["kind"] = artifact_kind
-    where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    where = "WHERE " + " AND ".join(where_parts)
     sql = (
         "SELECT session_id, ts, artifact_kind, repo, venue, artifact_name, "
         "size_bytes, content_hash, metadata "

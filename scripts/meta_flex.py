@@ -51,7 +51,7 @@ def main() -> None:
     url = sys.argv[1] if len(sys.argv) > 1 else _default_url()
     print(f"Running PaperPilot on: {url}")
 
-    sid = trace.new_session()
+    sid = trace.new_session("system")
 
     print("  [1/4] ingesting repo...")
     bundle = fetch_repo(url)

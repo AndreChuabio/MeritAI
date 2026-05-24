@@ -90,7 +90,7 @@ def main() -> None:
     if not nimble_client.is_configured():
         print("NIMBLE_API_KEY not set. Skipping corpus refresh.")
         sys.exit(0)
-    sid = new_session()
+    sid = new_session("system")
     print(f"Session: {sid}")
 
     client = get_client()

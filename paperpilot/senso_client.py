@@ -51,10 +51,14 @@ def _headers() -> dict[str, str]:
 def ingest_raw(
     title: str,
     text: str,
-    session_id: str | None = None,
+    session_id: str,
     tag_ids: list[str] | None = None,
 ) -> dict[str, Any] | None:
-    """Create a raw KB node. Returns the API response or None on failure."""
+    """Create a raw KB node. Returns the API response or None on failure.
+
+    session_id is required; the caller must have already bound a user_id
+    to it via trace.new_session() so the trace.step row is tenant-scoped.
+    """
     if not is_configured():
         return None
 
@@ -62,8 +66,7 @@ def ingest_raw(
     if tag_ids:
         body["tag_ids"] = tag_ids
 
-    sid = session_id or trace.new_session()
-    with trace.step(sid, "senso.ingest", title=title[:80], chars=len(text)) as ctx:
+    with trace.step(session_id, "senso.ingest", title=title[:80], chars=len(text)) as ctx:
         try:
             resp = httpx.post(
                 f"{SENSO_BASE_URL}/org/kb/raw",
