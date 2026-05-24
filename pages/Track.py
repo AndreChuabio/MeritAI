@@ -22,6 +22,7 @@ import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
+from paperpilot.auth import require_auth
 from paperpilot.outreach import log as outreach_log
 from paperpilot.outreach.scholar import O1_THRESHOLD, fetch as fetch_scholar
 from paperpilot.outreach.senso import Senso, SensoAPIError
@@ -30,6 +31,8 @@ from paperpilot.outreach.senso import Senso, SensoAPIError
 load_dotenv()
 
 st.set_page_config(page_title="Track — Visa Progress", page_icon="🛂", layout="wide")
+
+user_id = require_auth()
 
 st.markdown(
     """<style>
@@ -46,6 +49,7 @@ st.markdown(
 )
 
 st.title("🛂 Track — O-1 + NIW Progress")
+st.caption(f"Logged in as {st.session_state.get('user_name', user_id)}")
 st.caption(
     "Every signal we have on your case, mapped to USCIS extraordinary-ability + "
     "national-interest-waiver criteria. Refresh after generating new drafts."
@@ -61,11 +65,11 @@ scholar_url_for_fetch = st.session_state.get("brand_scholar") or None
 scholar = fetch_scholar(scholar_url_for_fetch)
 
 try:
-    posted_count = outreach_log.count_posted("demo")
-    total_drafts = outreach_log.total_drafts("demo")
-    by_channel = outreach_log.count_by_channel("demo")
-    by_purpose = outreach_log.count_by_purpose("demo")
-    by_day = outreach_log.drafts_by_day("demo")
+    posted_count = outreach_log.count_posted(user_id)
+    total_drafts = outreach_log.total_drafts(user_id)
+    by_channel = outreach_log.count_by_channel(user_id)
+    by_purpose = outreach_log.count_by_purpose(user_id)
+    by_day = outreach_log.drafts_by_day(user_id)
 except Exception:
     posted_count = 0
     total_drafts = 0

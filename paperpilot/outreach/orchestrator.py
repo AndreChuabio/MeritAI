@@ -58,12 +58,15 @@ def generate_drafts(
     purpose: Purpose | str,
     context: str,
     session_id: str,
+    user_id: str,
     logger: Any | None = None,
 ) -> list[DraftCard]:
     """Generate one draft card per channel mapped to `purpose`.
 
-    `logger` is an `outreach.log` module reference or any object exposing
-    `log_generate(...)`. Passing it explicitly keeps the function testable.
+    `user_id` is the authed caller; required so outreach_log rows are
+    scoped to the right user. `logger` is an `outreach.log` module
+    reference or any object exposing `log_generate(...)`. Passing it
+    explicitly keeps the function testable.
     """
     if isinstance(purpose, str):
         purpose = Purpose(purpose)
@@ -90,7 +93,7 @@ def generate_drafts(
                 ctx["draft_chars"] = len(md)
                 if logger is not None:
                     logger.log_generate(
-                        user_id="demo",
+                        user_id=user_id,
                         purpose=purpose.value,
                         channel=channel,
                         content_type_id=ct_id,

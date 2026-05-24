@@ -15,6 +15,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from paperpilot import trace
+from paperpilot.auth import require_auth
 from paperpilot.outreach import log as outreach_log
 from paperpilot.outreach.log import (
     UserProfile,
@@ -33,6 +34,8 @@ load_dotenv()
 
 
 st.set_page_config(page_title="Market — Outreach Drafts", page_icon="📣", layout="wide")
+
+user_id = require_auth()
 
 st.markdown(
     """<style>
@@ -74,41 +77,39 @@ tab_brand, tab_generate, tab_search, tab_blast = st.tabs(
 # Personal Brand tab — user-facing profile (Senso under the hood)
 # =========================================================================
 with tab_brand:
-    # Top-right "Load My Profile" search (first + last name)
+    # Top-right "Load My Profile" — current user only, no search input.
     header_l, header_r = st.columns([3, 2])
     with header_l:
         st.subheader("Build Your Profile")
         st.caption("Define your voice, story, and links. We use this to draft every outreach.")
     with header_r:
-        st.markdown("**Already have a profile?**")
-        load_c1, load_c2 = st.columns([3, 1])
-        load_name = load_c1.text_input(
-            "Name", key="load_name", label_visibility="collapsed", placeholder="Your name"
-        )
-        if load_c2.button("Load My Profile", disabled=not _HAS_SENSO_KEY, use_container_width=True):
-            full = load_name.strip()
-            if not full:
-                st.warning("Enter your name.")
+        st.markdown(f"**Logged in:** {st.session_state.get('user_name', user_id)}")
+        if st.button(
+            "Load My Profile",
+            disabled=not _HAS_SENSO_KEY,
+            use_container_width=True,
+            key="load_my_profile_btn",
+        ):
+            own_name = st.session_state.get("user_name") or user_id
+            try:
+                p = find_user_profile_by_name(own_name)
+            except Exception as e:  # noqa: BLE001
+                p = None
+                st.error(f"Lookup failed: {e}")
+            if p is None:
+                st.warning(f"No saved profile yet for {own_name}.")
             else:
-                try:
-                    p = find_user_profile_by_name(full)
-                except Exception as e:  # noqa: BLE001
-                    p = None
-                    st.error(f"Lookup failed: {e}")
-                if p is None:
-                    st.warning(f"No profile found for '{full}'.")
-                else:
-                    st.session_state["brand_name"] = p.name
-                    st.session_state["brand_title"] = p.title
-                    st.session_state["brand_about"] = p.about
-                    st.session_state["brand_voice"] = p.voice_tone
-                    st.session_state["brand_github"] = p.github_url
-                    st.session_state["brand_linkedin"] = p.linkedin_url
-                    st.session_state["brand_scholar"] = p.scholar_url
-                    st.session_state["brand_site"] = p.site_url
-                    st.session_state["brand_resume"] = p.resume_text
-                    st.success(f"Loaded profile for {p.name} ✓")
-                    st.rerun()
+                st.session_state["brand_name"] = p.name
+                st.session_state["brand_title"] = p.title
+                st.session_state["brand_about"] = p.about
+                st.session_state["brand_voice"] = p.voice_tone
+                st.session_state["brand_github"] = p.github_url
+                st.session_state["brand_linkedin"] = p.linkedin_url
+                st.session_state["brand_scholar"] = p.scholar_url
+                st.session_state["brand_site"] = p.site_url
+                st.session_state["brand_resume"] = p.resume_text
+                st.success(f"Loaded profile for {p.name}")
+                st.rerun()
 
     col_l, col_r = st.columns(2)
     name = col_l.text_input("Name", value=st.session_state.get("brand_name", "Nikki"))
@@ -184,11 +185,10 @@ with tab_brand:
         except SensoAPIError as e:
             st.error(f"Save failed: {e}")
 
-        # Mirror into ClickHouse user_profile so the Load search can find it.
-        user_id_slug = "_".join(name.lower().split()) or "demo"
+        # Mirror into ClickHouse user_profile, keyed by authed user_id.
         try:
             upsert_user_profile(UserProfile(
-                user_id=user_id_slug,
+                user_id=user_id,
                 name=name, title=title, about=about, voice_tone=voice,
                 github_url=github_url, linkedin_url=linkedin_url,
                 scholar_url=scholar_url, site_url=site_url,
@@ -243,7 +243,7 @@ with tab_generate:
         type="primary",
         disabled=(not _HAS_SENSO_KEY) or (not user_ctx.strip()),
     ):
-        sid = st.session_state.get("outreach_sid") or trace.new_session()
+        sid = st.session_state.get("outreach_sid") or trace.new_session(user_id)
         st.session_state["outreach_sid"] = sid
         with st.spinner("Drafting via Senso..."):
             cards = generate_drafts(
@@ -251,6 +251,7 @@ with tab_generate:
                 purpose=purpose_label,
                 context=user_ctx,
                 session_id=sid,
+                user_id=user_id,
                 logger=outreach_log,
             )
         st.session_state["outreach_cards"] = cards

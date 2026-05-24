@@ -22,12 +22,15 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from paperpilot import trace
+from paperpilot.auth import require_auth, sign_out
 from paperpilot.pipeline import load_demo_cache
 
 
 load_dotenv()
 
 st.set_page_config(page_title="Productize", page_icon="📄", layout="wide")
+
+user_id = require_auth()
 
 # Compact sidebar — narrower nav so the main canvas gets the space.
 st.markdown(
@@ -44,6 +47,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+with st.sidebar:
+    st.markdown(f"**Logged in:** {st.session_state.get('user_name', user_id)}")
+    if st.button("Sign out", key="sidebar_sign_out", use_container_width=True):
+        sign_out()
+
 st.title("Productize")
 st.caption(
     "GitHub repo → Gemini summary → ClickHouse venue match → Claude paper draft. "
@@ -51,7 +59,7 @@ st.caption(
 )
 
 if "session_id" not in st.session_state:
-    st.session_state.session_id = trace.new_session()
+    st.session_state.session_id = trace.new_session(user_id)
     # Best-effort: ensure the new session_artifacts table exists. Old
     # ClickHouse deployments that were seeded before this feature shipped
     # will gain the table at first app start. Never crash the UI on failure.
@@ -171,7 +179,7 @@ with right:
             fetch_artifacts,
         )
 
-        past = fetch_artifacts(limit=15)
+        past = fetch_artifacts(user_id, limit=15)
     except Exception as exc:  # noqa: BLE001 -- right rail must never crash
         past = []
         st.caption(f"`session_artifacts` unavailable: {exc}")
@@ -710,6 +718,7 @@ with left:
                 save_key = ("plugin_zip", zip_hash)
                 if save_key not in st.session_state.saved_artifacts:
                     save_artifact(
+                        user_id,
                         session_id=session_id,
                         artifact_kind="plugin_zip",
                         artifact_name=f"{pack.plugin_name}.zip",
@@ -789,6 +798,7 @@ with left:
                 tex_key = ("paper_tex", tex_hash)
                 if tex_key not in st.session_state.saved_artifacts:
                     save_artifact(
+                        user_id,
                         session_id=session_id,
                         artifact_kind="paper_tex",
                         artifact_name="paperpilot.tex",
@@ -802,6 +812,7 @@ with left:
                 bib_key = ("paper_bib", bib_hash)
                 if bib_key not in st.session_state.saved_artifacts:
                     save_artifact(
+                        user_id,
                         session_id=session_id,
                         artifact_kind="paper_bib",
                         artifact_name="references.bib",
