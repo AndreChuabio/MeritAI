@@ -1,8 +1,10 @@
-# Productionize Your Product
+# PaperPilot
 
-Three agentic surfaces on one stack: turn your GitHub repo into a research paper, draft your personal-brand outreach for it, and track your O-1 / National Interest Waiver visa progress. Every LLM call traced.
+Three agentic surfaces on one stack: turn your GitHub repo into a research paper, draft your personal-brand outreach for it, and track your O-1 / National Interest Waiver visa progress against the USCIS criteria. Every LLM call traced.
 
 Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ. Live at **https://paperpilot-production-97dc.up.railway.app**.
+
+**Post-hackathon (2026-05-24):** hardened for two real users (Andre + Nikki) with passcode auth, per-user data isolation across ClickHouse, an O-1A Evidence Ledger that replaces the heuristic gauge with declared evidence against the 8 USCIS criteria, per-criterion narrative drafting, and a reportlab-rendered PDF dossier for attorney handoff. Productize + Market kept their hackathon shapes; Track was rebuilt around real petition workflow.
 
 ---
 
@@ -10,7 +12,7 @@ Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ. Live a
 
 A three-page Streamlit app (`Productize.py` entry + `pages/Market.py` + `pages/Track.py`) on a shared agentic spine.
 
-### 📄 Productize — repo → paper draft for a matched venue
+### Productize -- repo to paper draft for a matched venue
 
 1. **Ingest.** Pulls README + file tree + ranked source files from any GitHub repo. Concatenates into a single bundle under a 600K-token cap.
 2. **Summarize.** Sends the bundle to Gemini 2.5 Flash through Vercel AI Gateway (1M-context window). Returns a structured `ResearchSummary`: problem, contribution, method, results, limitations, keywords.
@@ -19,23 +21,28 @@ A three-page Streamlit app (`Productize.py` entry + `pages/Market.py` + `pages/T
 5. **Export.** LaTeX + BibTeX, ready to open in Overleaf. Auto-persisted to ClickHouse `session_artifacts`.
 6. **Extract Claude plugin.** A second pass over the same repo bundle identifies reusable units and packages them as a complete Claude Code plugin: `SKILL.md` files, slash commands, subagents, lifecycle hooks, MCP build prompts, all bundled with a `plugin.json` in the standard `~/.claude/plugins/<name>/` layout. Drop-in zip.
 
-### 📣 Market — outreach drafting on a Senso brand kit
+### Market -- outreach drafting on a Senso brand kit
 
 - **Personal Brand tab.** Save / load a profile (name, title, voice, links, resume) into a Senso `brand_kit` so all subsequent drafts inherit the user's voice.
 - **Generate Content tab.** Pick a purpose (VISA, SPEAKING, COLLAB, NETWORK), describe the goal, get drafts back via Senso's content-generation pipeline. Each draft includes a `cost_source`-tagged trace.
 - **Search People tab.** Discover GitHub users / open-source maintainers via the `github_repos.py` helper.
 - **Blast tab.** Schedule + dispatch drafts to outbound channels.
 
-### 📈 Track — O-1 + National Interest Waiver progress dashboard
+### Track -- O-1A evidence ledger + petition-quality narrative drafting
 
-Aggregates every signal we have about the candidate's readiness for an O-1 (extraordinary ability) and NIW case:
+Track was rebuilt post-hackathon around real petition workflow. The headline is a count, not a gauge, and the source of truth is what the user has actually declared.
 
-- Authored scholarly articles (Google Scholar via `outreach/scholar.py`)
-- Citations & impact (Scholar academic + Senso AI)
-- Speaking + collaboration outreach drafted vs. posted (from `outreach_log`)
-- Headline gauges per USCIS criteria set + per-channel bar chart + drafts-over-time line
+**Headline metric.** "X of 8 O-1A criteria satisfied" with 8 status pills above the tabs. USCIS requires evidence in at least 3 of 8 criteria to qualify; the pills go green as the user declares items.
 
-### 🟢 Observability throughout
+**Evidence Ledger tab.** One expander per USCIS O-1A criterion (awards, membership, published material about you, judging, original contributions, scholarly articles, critical role, high salary). Each expander lets the user declare items (title, description, evidence URL, date), list and delete existing items, and stream a per-criterion **petition-quality narrative** via `paperpilot/outreach/evidence_draft.py` -- a ~200-word paragraph an immigration attorney can lift verbatim. Stored in ClickHouse `o1_evidence` (ReplacingMergeTree, soft-delete via tombstone).
+
+**Download O-1A dossier (PDF).** Two-step button on the Dashboard tab. Drafts all 8 narratives sequentially via the AI Gateway, bundles them with declared evidence per criterion and a cover page, and emits a reportlab-rendered PDF ready for attorney handoff. End-to-end ~15-40s.
+
+**Dashboard tab.** Auto-derived heuristics from Scholar, Senso, and `outreach_log` -- demoted under a caption that says "not USCIS-official". The cumulative-citations chart now uses live `by_year` data parsed from Scholar HTML, not the mock seed.
+
+**Scholar transparency.** When the Nimble Scholar fetch fails or no Scholar URL is configured, the page renders a yellow banner with an explicit reason -- replaces the silent mock-fallback that previously showed another user's seeded sample data.
+
+### Observability throughout
 
 Every LLM call wrapped by `trace.step(...)` → in-process buffer (UI right rail) + ClickHouse `trace_log` (audit) + **Lapdog** local dashboard + **Datadog LLM Observability** cloud forward. Cost+token pill in the right rail sums every `.end` event with a `(est.)` tag when the Gateway omits usage on streamed responses.
 
@@ -64,7 +71,10 @@ Every LLM call wrapped by `trace.step(...)` → in-process buffer (UI right rail
 | LLM routing | OpenAI-compatible client → multi-provider | **Vercel AI Gateway** |
 | Long-context ingest | Gemini 2.5 Flash, 1M-ctx | **DeepMind** |
 | Drafting | Claude Sonnet 4.6, streamed | **Anthropic** |
-| Vector search + audit + artifacts | ClickHouse Cloud — 4 tables: `cfp`, `arxiv`, `trace_log`, `session_artifacts` | **ClickHouse** |
+| Vector search + audit + artifacts + evidence | ClickHouse Cloud -- 7 tables: `cfp`, `arxiv`, `trace_log`, `session_artifacts`, `user_profile`, `outreach_log`, `o1_evidence` | **ClickHouse** |
+| Multi-user auth | passcode shim (`paperpilot/auth.py`); two users (Andre + Nikki) from `PAPERPILOT_USERS_JSON` env var; swap-in target is Clerk | (post-hack) |
+| PDF dossier export | `reportlab` -- cover + summary + per-criterion sections with drafted narratives | (post-hack) |
+| Citation trajectory chart | `plotly` -- cumulative `by_year` parsed from live Scholar HTML | (post-hack) |
 | Live web data | `/v1/search` + `/v1/search?include_answer` + `/v1/extract` | **Nimble** |
 | Brand + tone KB | `/org/brand-kit` + `/org/kb/raw` + `/org/search/context` + `/org/content-generation` | **Senso** |
 | LLM observability | Lapdog local + Datadog LLM Observability cloud (`DD_LLMOBS_AGENTLESS_ENABLED=1`) | **Datadog** |
@@ -111,6 +121,48 @@ Set `NIMBLE_API_KEY` to enable; without it the buttons hide, venue ranking falls
 
 ---
 
+## Authentication
+
+PaperPilot was multi-tenant-hardened post-hackathon. Every Streamlit page is gated by `paperpilot.auth.require_auth()`, which renders a passcode form and blocks the rest of the page render until the user signs in. After a successful sign-in, `st.session_state["user_id"]` and `st.session_state["user_name"]` are populated; the sidebar shows the signed-in user with a sign-out button.
+
+Configure users via the `PAPERPILOT_USERS_JSON` env var:
+
+```bash
+PAPERPILOT_USERS_JSON='[{"user_id":"andre","name":"Andre","passcode":"..."},{"user_id":"nikki","name":"Nikki","passcode":"..."}]'
+```
+
+If the env var is unset, empty, or invalid JSON, the module falls back to a single dev user (`dev` / `dev`) and surfaces an `st.warning` so the degradation is obvious in production.
+
+`user_id` threads through every write: `trace.new_session(user_id)`, `pipeline.save_artifact(user_id, ...)`, `clickhouse_client.fetch_artifacts(user_id, ...)`, `outreach.orchestrator.generate_drafts(..., user_id=...)`, and the O-1A evidence ledger. The past-sessions panel on Productize, the outreach drafts on Market, and the evidence ledger on Track are all scoped to the signed-in user.
+
+The auth shim is intentionally minimal and is a swap-in target for Clerk on Vercel Marketplace when the user count grows past two.
+
+---
+
+## Migrations
+
+Schema lives in two places, with the migrations folder as the source of truth for existing deployments:
+
+- `paperpilot/clickhouse_client.py::SCHEMA_SQL` -- `CREATE TABLE IF NOT EXISTS` strings for every table, run by `init_schema()` at Streamlit boot. Provisions a fresh deploy.
+- `migrations/*.sql` -- one file per additive change against an existing cluster (column adds, new tables). Idempotent (`IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
+
+Run all pending migrations against the configured ClickHouse with:
+
+```bash
+uv run python scripts/run_migrations.py
+```
+
+The runner reads every `.sql` file in lexicographic order, strips SQL comments, splits on `;`, and runs each statement. Safe to re-run.
+
+| File | What it does |
+|------|--------------|
+| `0002_add_user_id.sql` | Adds `user_id String DEFAULT ''` to `trace_log` and `session_artifacts`. Existing rows backfill to `''` and become invisible to user-scoped reads (the intended privacy behavior). |
+| `0003_add_o1_evidence.sql` | Creates the `o1_evidence` table (ReplacingMergeTree by `updated_at`, ordered by `user_id, criterion, id`, soft-delete via tombstone column). |
+
+`init_schema()` fires once per session from `Productize.py`. If you navigate directly to a sub-page URL on a fresh cluster, the schema may not be provisioned yet -- run the migrations script before first use.
+
+---
+
 ## Quickstart
 
 ```bash
@@ -123,13 +175,15 @@ brew install datadog/lapdog/lapdog
 # 2. Configure
 cp .env.example .env
 # Required: AI_GATEWAY_API_KEY, CLICKHOUSE_HOST/USER/PASSWORD
+# Required for auth: PAPERPILOT_USERS_JSON (see Authentication section)
 # Recommended: DD_API_KEY + DD_SITE + DD_LLMOBS_ENABLED=1 + DD_LLMOBS_ML_APP for cloud forward
 # Recommended: NIMBLE_API_KEY for live venue discovery + verification + prior-art
 # Recommended: SENSO_API_KEY for brand-kit + tone KB + outreach drafting
 
-# 3. Seed corpora
-make seed        # CFP + arxiv embeddings into ClickHouse
-make seed-senso  # tone exemplars into Senso KB
+# 3. Seed corpora + apply migrations
+make seed                                # CFP + arxiv embeddings into ClickHouse
+make seed-senso                          # tone exemplars into Senso KB
+uv run python scripts/run_migrations.py  # additive schema for user_id + o1_evidence
 
 # 4. Launch
 make dev
@@ -152,11 +206,16 @@ make railway-deploy    # railway up --detach
 
 Live URL is printed by `railway domain` (or generated automatically). The production container ships LLM traces to Datadog cloud directly via the agentless ddtrace mode since Lapdog is macOS-only.
 
+**Before first prod sign-in:**
+
+1. Set `PAPERPILOT_USERS_JSON` in the Railway service env vars with real passcodes (not the local placeholders). Railway auto-redeploys on env var change.
+2. Run `uv run python scripts/run_migrations.py` against production ClickHouse (the migrations are idempotent and additive -- safe to re-run).
+
 ### Three pages in the live app
 
-- **Productize** (`Productize.py`). Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). Ingest → match → draft → export `.tex/.bib`. "Extract plugin" runs the Claude Code plugin extractor on the same bundle. "Load demo cache" replays a precomputed `data/demo_cache.json` with a 6-second synthetic event drip (Wi-Fi-failure insurance).
-- **Market** (`pages/Market.py`). Personal Brand / Generate Content / Search People / Blast tabs over a Senso brand-kit.
-- **Track** (`pages/Track.py`). O-1 + NIW progress gauges + Scholar citation tracking + drafts-vs-posted analytics.
+- **Productize** (`Productize.py`). Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). Ingest -> match -> draft -> export `.tex/.bib`. "Extract plugin" runs the Claude Code plugin extractor on the same bundle. "Load demo cache" replays a precomputed `data/demo_cache.json` with a 6-second synthetic event drip (Wi-Fi-failure insurance). Past-sessions panel and saved artifacts are scoped to the signed-in user.
+- **Market** (`pages/Market.py`). Personal Brand / Generate Content / Search People / Blast tabs over a Senso brand-kit. Profile load is gated to the signed-in user (closed the resume-leak vector from the hackathon build).
+- **Track** (`pages/Track.py`). Headline "X of 8 O-1A criteria satisfied" with status pills, Evidence Ledger tab for declaring per-criterion items, "Draft narrative" buttons that stream petition-quality paragraphs via the AI Gateway, "Build O-1A dossier (PDF)" two-step download via reportlab, Scholar mock-fallback transparency banner, and the heuristic gauges demoted to "not USCIS-official" on the Dashboard tab.
 
 `make ping` runs a CLI hello-world. `make precompute URL=...` refreshes the demo cache. `make meta` runs PaperPilot on its own repo to regenerate `submission/paperpilot.tex`.
 
@@ -169,9 +228,14 @@ agentichack/
   Productize.py                   Streamlit entry: repo -> paper -> plugin
   pages/
     Market.py                       Senso brand kit + outreach drafting (4 tabs)
-    Track.py                        O-1 + NIW progress dashboard
+    Track.py                        O-1A evidence ledger + narrative drafter + PDF dossier
 
   paperpilot/
+    auth.py                       passcode shim, require_auth(), sign_out()
+    ui.py                         shared dark-theme component library
+                                  (sidebar_brand, hero, section_heading,
+                                   trace_event, metric_tile, venue_card,
+                                   evidence_tile)
     github_ingest.py              PyGithub repo -> ranked file bundle
     llm_ingest.py                 Gemini 1M-ctx -> structured ResearchSummary
     embed.py                      text-embedding-3-small via Gateway
@@ -182,20 +246,31 @@ agentichack/
     skill_render.py               PluginPack -> Claude Code plugin directory zip
     nimble_client.py              Search / Answers / Extract HTTPS client
     senso_client.py               KB ingest + search_context (tone retrieval for Productize)
-    clickhouse_client.py          schema + trace_log + session_artifacts
+    clickhouse_client.py          schema + trace_log + session_artifacts + o1_evidence
     latex_export.py               .tex + .bib assembly
-    pipeline.py                   end-to-end orchestrator + demo cache + save_artifact
-    trace.py                      log_event + step context manager + in-process buffer
+    pipeline.py                   end-to-end orchestrator + demo cache + save_artifact (user_id-scoped)
+    trace.py                      log_event + step context manager + in-process buffer (user_id-scoped)
     gateway.py                    Vercel AI Gateway client
     llm_ping.py                   Phase 1 hello-world helper
     outreach/                     Market + Track logic
       senso.py                      Senso brand-kit + content-types + content-generation
-      log.py                        UserProfile + draft log (ClickHouse-backed)
-      orchestrator.py               generate_drafts orchestration
+      log.py                        UserProfile + draft log (ClickHouse-backed, user-keyed)
+      orchestrator.py               generate_drafts orchestration (user_id-required)
       purpose.py                    VISA / SPEAKING / COLLAB / NETWORK enum + prompts
-      scholar.py                    Google Scholar fetch for Track dashboard
+      scholar.py                    Google Scholar fetch with mock-fallback transparency
+                                    + cumulative by_year derivation
       content_types.py              Senso content-type seed helpers
       github_repos.py               Find people via GitHub for outreach search
+      evidence.py                   O-1A evidence ledger CRUD (8 USCIS criteria)
+      evidence_draft.py             per-criterion narrative streaming via AI Gateway
+      dossier.py                    reportlab PDF dossier export
+
+  migrations/
+    0002_add_user_id.sql          ALTER ADD COLUMN user_id (additive)
+    0003_add_o1_evidence.sql      CREATE TABLE o1_evidence
+
+  .streamlit/
+    config.toml                   dark theme + base/primary/bg colors
 
   data/
     cfp_seed.json                 41 hand-curated CFPs
@@ -210,6 +285,7 @@ agentichack/
     demo_precompute.py            DEMO_MODE cache writer
     meta_flex.py                  run the agent on this repo itself
     railway_env_setup.sh          push .env into the linked Railway service
+    run_migrations.py             apply every migrations/*.sql against the configured ClickHouse
 
   submission/
     paperpilot.tex                meta-flex paper draft (PaperPilot on PaperPilot)
