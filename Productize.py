@@ -21,7 +21,7 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
-from paperpilot import trace
+from paperpilot import trace, ui
 from paperpilot.auth import require_auth, sign_out
 from paperpilot.pipeline import load_demo_cache
 
@@ -32,30 +32,25 @@ st.set_page_config(page_title="Productize", page_icon="📄", layout="wide")
 
 user_id = require_auth()
 
-# Compact sidebar — narrower nav so the main canvas gets the space.
-st.markdown(
-    """<style>
-    [data-testid="stSidebar"] {
-        width: 190px !important;
-        min-width: 190px !important;
-        max-width: 190px !important;
-    }
-    [data-testid="stSidebar"] [data-testid="stSidebarNav"] li {
-        font-size: 0.85rem !important;
-    }
-    </style>""",
-    unsafe_allow_html=True,
-)
+ui.inject_global_css()
 
 with st.sidebar:
-    st.markdown(f"**Logged in:** {st.session_state.get('user_name', user_id)}")
+    ui.sidebar_brand("PaperPilot")
+    st.markdown(
+        f'<div style="padding: 0 12px; color: var(--fg-muted); '
+        f'font-size: 0.82rem; margin-bottom: 8px;">'
+        f'Signed in as <span style="color: var(--fg); font-weight: 600;">'
+        f'{st.session_state.get("user_name", user_id)}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
     if st.button("Sign out", key="sidebar_sign_out", use_container_width=True):
         sign_out()
 
-st.title("Productize")
-st.caption(
-    "GitHub repo → Gemini summary → ClickHouse venue match → Claude paper draft. "
-    "Traced end-to-end by Datadog Lapdog."
+ui.hero(
+    "Productize",
+    "GitHub repo to Gemini summary to ClickHouse venue match to Claude paper draft. "
+    "Traced end-to-end by Datadog Lapdog.",
 )
 
 if "session_id" not in st.session_state:
@@ -151,28 +146,27 @@ with right:
     with pill_cols[1]:
         st.metric("Tokens (in / out)", f"{t_in:,} / {t_out:,}")
 
-    st.subheader("Agent trace")
-    st.caption(f"session: `{session_id}`")
+    ui.section_heading("Agent trace", f"session  {session_id}")
     if not events:
         st.info("No events yet. Run a stage on the left.")
     else:
         for evt in reversed(events[-30:]):
-            color = _stage_color(evt.kind)
-            st.markdown(
-                f'<div style="border-left:4px solid {color};padding:6px 10px;'
-                f'margin-bottom:6px;background:rgba(120,120,120,0.05);">'
-                f'<div style="font-weight:600">{evt.kind}</div>'
-                f'<div style="font-size:11px;opacity:0.6">+{evt.ts:.0f}</div>'
-                "</div>",
-                unsafe_allow_html=True,
-            )
-            if evt.payload:
-                with st.expander("payload", expanded=False):
-                    st.json(evt.payload, expanded=False)
+            kind = evt.kind
+            if kind.endswith(".error") or kind.endswith(".failed") or kind.endswith(".save_failed"):
+                status = "error"
+            elif kind.endswith(".end"):
+                status = "end"
+            elif kind.endswith(".start"):
+                status = "start"
+            else:
+                status = "info"
+            ui.trace_event(kind, evt.payload or {}, status=status, ts=evt.ts)
 
     st.divider()
-    st.markdown("**Past sessions**")
-    st.caption("Every paper + plugin generated lands in `session_artifacts`.")
+    ui.section_heading(
+        "Past sessions",
+        "Every paper + plugin generated lands in session_artifacts.",
+    )
     try:
         from paperpilot.clickhouse_client import (
             fetch_artifact_content,
@@ -232,10 +226,21 @@ with right:
                             st.error(f"Fetch failed: {exc}")
 
     st.divider()
-    st.markdown("**Sponsor wires**")
+    ui.section_heading("Sponsor wires")
     for label, status in _env_summary().items():
-        icon = "🟢" if status in {"configured", "enabled", "on", "live", "cached"} else "⚪"
-        st.write(f"{icon} {label}: `{status}`")
+        ok = status in {"configured", "enabled", "on", "live", "cached"}
+        dot_color = "var(--success)" if ok else "var(--fg-dim)"
+        st.markdown(
+            f'<div style="display:flex; align-items:center; gap:8px; '
+            f'padding: 4px 0; font-size: 0.82rem;">'
+            f'<span style="width:7px; height:7px; border-radius:50%; '
+            f'background:{dot_color}; box-shadow: 0 0 6px {dot_color};"></span>'
+            f'<span style="color: var(--fg-muted); flex:1;">{label}</span>'
+            f'<span style="font-family: var(--font-mono); color: var(--fg-dim); '
+            f'font-size: 0.75rem;">{status}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
     st.caption("Lapdog dashboard: https://lapdog.datadoghq.com (reads from local :8126)")
 
 
@@ -266,6 +271,12 @@ with left:
     # ------------------------------------------------------------------
     with tab_pipeline:
         # Quick-pick chips -- zero typing on the projector.
+        st.markdown(
+            '<div style="color: var(--fg-muted); font-size: 0.8rem; '
+            'font-weight: 500; text-transform: uppercase; '
+            'letter-spacing: 0.04em; margin: 4px 0 8px 0;">Sample repos</div>',
+            unsafe_allow_html=True,
+        )
         chip_cols = st.columns(4)
         _CHIPS = [
             ("nanoGPT", "https://github.com/karpathy/nanoGPT"),
@@ -457,31 +468,21 @@ with left:
                 col = cols[i % len(cols)]
                 is_nimble = venue.id.startswith("nimble:")
                 with col:
-                    with st.container(border=True):
-                        # Origin badge: curated ClickHouse corpus vs live Nimble Search.
-                        if is_nimble:
-                            st.markdown(
-                                f"**{venue.name}** "
-                                "<span style='background:#fb923c;color:white;"
-                                "font-size:10px;padding:2px 6px;border-radius:4px;'>"
-                                "LIVE · Nimble</span>",
-                                unsafe_allow_html=True,
-                            )
-                        else:
-                            st.markdown(
-                                f"**{venue.name}** "
-                                "<span style='background:#3b82f6;color:white;"
-                                "font-size:10px;padding:2px 6px;border-radius:4px;'>"
-                                "Curated</span>",
-                                unsafe_allow_html=True,
-                            )
-                        st.caption(f"fit `{venue.fit_score:.3f}` · {venue.days_until_deadline} days")
-                        st.write(venue.scope[:160] + ("..." if len(venue.scope) > 160 else ""))
-                        if is_nimble and venue.url:
-                            st.caption(f"[live source]({venue.url})")
-                        if st.button(f"Draft for {venue.name}", key=f"draft_{venue.id}"):
-                            st.session_state.chosen_venue = venue
-                            st.session_state.sections = {}
+                    ui.venue_card(
+                        name=venue.name,
+                        scope=venue.scope,
+                        fit_score=venue.fit_score,
+                        days_until=venue.days_until_deadline,
+                        is_live=is_nimble,
+                        source_url=venue.url if is_nimble else None,
+                    )
+                    if st.button(
+                        f"Draft for {venue.name}",
+                        key=f"draft_{venue.id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.chosen_venue = venue
+                        st.session_state.sections = {}
 
             # Nimble live web check for the top venue. Guarded behind an
             # explicit button so judges trigger it on demand -- the venue

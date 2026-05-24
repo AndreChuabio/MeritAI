@@ -14,7 +14,7 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from paperpilot import trace
+from paperpilot import trace, ui
 from paperpilot.auth import require_auth
 from paperpilot.outreach import log as outreach_log
 from paperpilot.outreach.log import (
@@ -37,24 +37,15 @@ st.set_page_config(page_title="Market — Outreach Drafts", page_icon="📣", la
 
 user_id = require_auth()
 
-st.markdown(
-    """<style>
-    [data-testid="stSidebar"] {
-        width: 190px !important;
-        min-width: 190px !important;
-        max-width: 190px !important;
-    }
-    [data-testid="stSidebar"] [data-testid="stSidebarNav"] li {
-        font-size: 0.85rem !important;
-    }
-    </style>""",
-    unsafe_allow_html=True,
-)
+ui.inject_global_css()
 
-st.title("📣 Market")
-st.caption(
+with st.sidebar:
+    ui.sidebar_brand("PaperPilot")
+
+ui.hero(
+    "Market",
     "Personal-brand profile + purpose-driven outreach drafts. "
-    "See your visa progress on the **Track** page."
+    "See your visa progress on the Track page.",
 )
 
 
