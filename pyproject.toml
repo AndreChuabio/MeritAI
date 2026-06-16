@@ -22,6 +22,7 @@ dependencies = [
     "fastapi>=0.137.1",
     "uvicorn[standard]>=0.47.0",
     "pyjwt[crypto]>=2.13.0",
+    "sse-starlette>=3.4.4",
 ]
 
 [dependency-groups]

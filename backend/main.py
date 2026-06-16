@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.auth import AuthUser, CurrentUser
+from backend.routers import draft, evidence, export, ingest, market, plugin
 from backend.venues import rank_venues
 from paperpilot import supabase_client
 from paperpilot.llm_ingest import ResearchSummary
@@ -36,6 +37,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Feature routers. Core routes (/health, /me, /match) stay defined inline below.
+app.include_router(ingest.router)
+app.include_router(draft.router)
+app.include_router(export.router)
+app.include_router(plugin.router)
+app.include_router(evidence.router)
+app.include_router(market.router)
 
 
 class HealthResponse(BaseModel):
