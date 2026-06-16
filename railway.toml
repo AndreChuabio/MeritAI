@@ -25,12 +25,14 @@
 #   MODEL_DRAFT               optional override
 #   MODEL_EMBED               optional override
 
+# Start command dispatches on SERVICE_KIND (see scripts/railway_start.sh):
+# unset/streamlit -> the legacy Streamlit app; api -> the FastAPI backend.
+# Both services share this file; the API service sets SERVICE_KIND=api.
+
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "uv run ddtrace-run streamlit run Productize.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
-healthcheckPath = "/_stcore/health"
-healthcheckTimeout = 30
+startCommand = "bash scripts/railway_start.sh"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
