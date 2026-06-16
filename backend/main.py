@@ -23,16 +23,22 @@ load_dotenv()
 
 app = FastAPI(title="PaperPilot API", version="0.1.0")
 
-# CORS for the Next.js frontend. Origins are configurable so preview and
-# production deploys can be allowlisted without a code change.
+# CORS for the Next.js frontend. Explicit origins (localhost + the production
+# domain) come from FRONTEND_ORIGINS; the regex additionally allows every
+# Vercel preview deploy (per-PR URLs like web-<hash>-<scope>.vercel.app) so
+# preview environments work without re-listing each ephemeral URL.
 _origins = [
     o.strip()
     for o in os.environ.get("FRONTEND_ORIGINS", "http://localhost:3000").split(",")
     if o.strip()
 ]
+_vercel_preview_regex = os.environ.get(
+    "FRONTEND_ORIGIN_REGEX", r"https://.*\.vercel\.app"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
+    allow_origin_regex=_vercel_preview_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
