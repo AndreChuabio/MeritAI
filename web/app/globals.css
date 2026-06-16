@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/*
+  PaperPilot playful theme.
+  Light cream background, indigo/violet primary, pink + lime accents.
+  Tailwind v4: tokens declared here become utilities (bg-cream, text-primary, etc.).
+*/
+
+@theme {
+  --color-cream: #fdf9f3;
+  --color-surface: #ffffff;
+  --color-ink: #1f1a2e;
+  --color-muted: #6b6480;
+
+  --color-primary: #6d4aff;
+  --color-primary-600: #5a37e6;
+  --color-primary-50: #efeaff;
+
+  --color-accent-pink: #ff5fa2;
+  --color-accent-pink-50: #ffe6f1;
+  --color-accent-lime: #b8f23d;
+  --color-accent-lime-50: #f1ffd6;
+
+  --color-success: #20b486;
+  --color-warning: #f5a524;
+  --color-danger: #f23d4c;
+
+  --font-display: var(--font-display-src), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-body-src), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-2xl: 1.25rem;
+  --shadow-soft: 0 10px 30px -12px rgba(109, 74, 255, 0.25);
+  --shadow-card: 0 4px 24px -8px rgba(31, 26, 46, 0.12);
+}
+
+:root {
+  --background: var(--color-cream);
+  --foreground: var(--color-ink);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Smooth, friendly default transitions for interactive elements. */
+button,
+a,
+input,
+textarea {
+  transition-property: color, background-color, border-color, box-shadow,
+    transform, opacity;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  transition-duration: 150ms;
+}
