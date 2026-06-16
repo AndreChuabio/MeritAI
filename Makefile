@@ -32,7 +32,7 @@ refresh-corpus:
 
 # Smoke: minimal LLM ping (no UI). Useful before launching the app.
 ping:
-	uv run python -c "from dotenv import load_dotenv; load_dotenv(); from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session()))"
+	uv run python -c "from dotenv import load_dotenv; load_dotenv(); from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session('cli')))"
 
 # Ping with Datadog cloud forward via ddtrace-run. Sends one LLM trace to
 # Datadog LLM Observability -- this is what the DD signup wizard waits for.
@@ -43,7 +43,7 @@ ping:
 # port 8126) intercepts the trace and never forwards it to cloud.
 ping-cloud:
 	DD_LLMOBS_AGENTLESS_ENABLED=1 \
-	  uv run --env-file .env ddtrace-run python -c "from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session()))"
+	  uv run --env-file .env ddtrace-run python -c "from paperpilot.trace import new_session; from paperpilot.llm_ping import ping; print(ping(new_session('cli')))"
 
 # Pre-compute the demo repo's pipeline output for DEMO_MODE fallback.
 # Usage: make precompute URL=https://github.com/owner/repo
