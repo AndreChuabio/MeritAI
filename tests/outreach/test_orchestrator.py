@@ -21,6 +21,7 @@ def test_generate_drafts_returns_one_card_per_channel():
         purpose=Purpose.BRAND,
         context="ML4H paper on retrieval calibration",
         session_id="sess_test",
+        user_id="andre",
         logger=MagicMock(),
     )
 
@@ -50,6 +51,7 @@ def test_generate_drafts_continues_when_one_channel_fails():
         purpose=Purpose.BRAND,
         context="ctx",
         session_id="sess_test",
+        user_id="andre",
         logger=MagicMock(),
     )
 
@@ -74,6 +76,7 @@ def test_generate_drafts_calls_logger_for_each_success():
         purpose=Purpose.SERVICE,
         context="ctx",
         session_id="sess_test",
+        user_id="andre",
         logger=logger,
     )
     # SERVICE has 3 channels -> 3 log_generate calls.
