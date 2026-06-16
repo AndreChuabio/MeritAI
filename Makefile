@@ -16,6 +16,10 @@ dev:
 dev-raw:
 	uv run streamlit run Productize.py
 
+# Run the FastAPI backend (Phase 2) with autoreload on :8000.
+api:
+	uv run uvicorn backend.main:app --reload --port 8000
+
 # Seed ClickHouse with CFP + arxiv corpora.
 seed:
 	uv run python scripts/seed_clickhouse.py

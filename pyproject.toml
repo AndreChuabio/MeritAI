@@ -19,6 +19,9 @@ dependencies = [
     "reportlab>=4.0,<5",
     "plotly>=5.24,<7",
     "psycopg[binary]>=3.3.4",
+    "fastapi>=0.137.1",
+    "uvicorn[standard]>=0.47.0",
+    "pyjwt[crypto]>=2.13.0",
 ]
 
 [dependency-groups]
