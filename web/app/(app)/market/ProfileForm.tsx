@@ -53,6 +53,18 @@ function readString(source: Profile, key: keyof MarketProfile): string {
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * Accept bare domains in URL fields. A non-empty value without an http(s)
+ * scheme gets https:// prepended, so "andrechuabio.github.io" is saved as
+ * "https://andrechuabio.github.io" rather than rejected.
+ */
+function normalizeUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 function fromProfile(source: Profile): MarketProfile {
   return {
     name: readString(source, "name"),
@@ -110,7 +122,13 @@ export function ProfileForm() {
     event.preventDefault();
     setSave({ kind: "saving" });
     try {
-      const payload: Profile = { ...profile };
+      const payload: Profile = {
+        ...profile,
+        github_url: normalizeUrl(profile.github_url),
+        linkedin_url: normalizeUrl(profile.linkedin_url),
+        scholar_url: normalizeUrl(profile.scholar_url),
+        site_url: normalizeUrl(profile.site_url),
+      };
       const result = await api.market.putProfile(payload);
       setProfile(fromProfile(result));
       setSave({ kind: "saved" });
@@ -188,7 +206,8 @@ export function ProfileForm() {
           <Input
             name="github_url"
             label="GitHub URL"
-            type="url"
+            type="text"
+            inputMode="url"
             placeholder="https://github.com/you"
             value={profile.github_url}
             onChange={(e) => update("github_url", e.target.value)}
@@ -196,7 +215,8 @@ export function ProfileForm() {
           <Input
             name="linkedin_url"
             label="LinkedIn URL"
-            type="url"
+            type="text"
+            inputMode="url"
             placeholder="https://linkedin.com/in/you"
             value={profile.linkedin_url}
             onChange={(e) => update("linkedin_url", e.target.value)}
@@ -204,7 +224,8 @@ export function ProfileForm() {
           <Input
             name="scholar_url"
             label="Google Scholar URL"
-            type="url"
+            type="text"
+            inputMode="url"
             placeholder="https://scholar.google.com/..."
             value={profile.scholar_url}
             onChange={(e) => update("scholar_url", e.target.value)}
@@ -212,7 +233,8 @@ export function ProfileForm() {
           <Input
             name="site_url"
             label="Personal site URL"
-            type="url"
+            type="text"
+            inputMode="url"
             placeholder="https://you.dev"
             value={profile.site_url}
             onChange={(e) => update("site_url", e.target.value)}
