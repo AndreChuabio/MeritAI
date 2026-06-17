@@ -18,11 +18,32 @@ import {
  * Outreach purposes accepted by the backend (OutreachGenerateRequest.purpose).
  */
 const PURPOSES = [
-  { id: "VISA", label: "Visa", blurb: "Build an O-1A / EB-1 evidence trail." },
-  { id: "CAREER", label: "Career", blurb: "Job hunts and role conversations." },
-  { id: "NETWORK", label: "Network", blurb: "Warm intros and peer outreach." },
-  { id: "BRAND", label: "Brand", blurb: "Grow your public presence." },
-  { id: "SERVICE", label: "Service", blurb: "Pitch consulting or services." },
+  {
+    id: "VISA",
+    label: "Visa",
+    blurb:
+      "Ask someone for a reference letter or evidence toward an O-1A or EB-1 case.",
+  },
+  {
+    id: "CAREER",
+    label: "Career",
+    blurb: "Reach out about a job, a role, or a referral.",
+  },
+  {
+    id: "NETWORK",
+    label: "Network",
+    blurb: "Introduce yourself, ask for advice, or request a warm intro.",
+  },
+  {
+    id: "BRAND",
+    label: "Brand",
+    blurb: "Pitch a talk, podcast, or collaboration to grow your visibility.",
+  },
+  {
+    id: "SERVICE",
+    label: "Service",
+    blurb: "Offer your consulting or services to a potential client.",
+  },
 ] as const;
 
 type Purpose = (typeof PURPOSES)[number]["id"];
@@ -87,6 +108,12 @@ function purposeLabel(id: string): string {
   return PURPOSES.find((p) => p.id === id)?.label ?? id;
 }
 
+/** Lightweight email shape check for the recipient field. */
+function isValidEmail(value: string): boolean {
+  const trimmed = value.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+}
+
 /** Pull a subject line out of a draft body, or fall back to a sensible default. */
 function deriveSubject(body: string, purpose: string): string {
   for (const line of body.split("\n").slice(0, 6)) {
@@ -98,7 +125,12 @@ function deriveSubject(body: string, purpose: string): string {
   return `${purposeLabel(purpose)} outreach`;
 }
 
-export function OutreachStudio() {
+interface OutreachStudioProps {
+  /** Reports the current outreach step (2 generate, 3 recipient, 4 send). */
+  onStepChange?: (step: number) => void;
+}
+
+export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
   const [purpose, setPurpose] = useState<Purpose>("VISA");
   const [context, setContext] = useState("");
   const [cards, setCards] = useState<DraftCardView[]>([]);
@@ -180,9 +212,13 @@ export function OutreachStudio() {
     }
   }
 
-  function selectLead(lead: PersonLead) {
+  // Key of the lead currently chosen as recipient, so we can mark it.
+  const [selectedLeadKey, setSelectedLeadKey] = useState<string | null>(null);
+
+  function selectLead(lead: PersonLead, key: string) {
     setToName(lead.name);
     if (lead.email) setToEmail(lead.email);
+    setSelectedLeadKey(key);
   }
 
   function bodyFor(card: DraftCardView, key: string): string {
@@ -196,7 +232,8 @@ export function OutreachStudio() {
       subject,
     )}&body=${encodeURIComponent(body)}`;
     // Open the user's mail client with the draft pre-filled.
-    window.location.href = mailto;
+    window.location.assign(mailto);
+    setOpenedOnce(true);
     try {
       await api.market.logSent({
         purpose,
@@ -212,6 +249,8 @@ export function OutreachStudio() {
   }
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // True once the user has opened at least one draft in their mail app.
+  const [openedOnce, setOpenedOnce] = useState(false);
 
   async function copyCard(key: string, body: string) {
     try {
@@ -226,14 +265,26 @@ export function OutreachStudio() {
   }
 
   const hasDrafts = cards.some((c) => !c.error && c.markdown);
+  const emailReady = isValidEmail(toEmail);
+
+  // Report flow progress to the page step indicator:
+  // 2 = generating drafts, 3 = drafts ready / picking a recipient,
+  // 4 = a recipient is set, or a draft has been opened to send.
+  useEffect(() => {
+    let step = 2;
+    if (hasDrafts) step = 3;
+    if (hasDrafts && (emailReady || openedOnce)) step = 4;
+    onStepChange?.(step);
+  }, [hasDrafts, emailReady, openedOnce, onStepChange]);
 
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardTitle>Outreach studio</CardTitle>
+        <CardTitle>Step 2: Generate a draft</CardTitle>
         <CardDescription>
-          Pick a purpose, add context, and generate channel-ready drafts in your
-          voice.
+          Pick why you are reaching out, add a sentence of context, and we
+          write a first draft using your profile. You can edit it before
+          anything is sent.
         </CardDescription>
 
         <form onSubmit={handleGenerate} className="mt-5 flex flex-col gap-5">
@@ -267,14 +318,21 @@ export function OutreachStudio() {
             </p>
           </fieldset>
 
-          <Textarea
-            name="context"
-            label="Context"
-            placeholder="Who are you reaching, and what is the ask? Add specifics for sharper drafts."
-            className="min-h-32"
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
-          />
+          <div className="flex flex-col gap-2">
+            <Textarea
+              name="context"
+              label="Context (optional)"
+              placeholder="Who are you reaching, and what is the ask? Add specifics for a sharper draft."
+              className="min-h-32"
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+            />
+            <p className="text-xs text-muted">
+              Example: &ldquo;Reaching Dr. Chen, who reviewed my paper at
+              NeurIPS, to ask for a recommendation letter about my work on
+              graph models.&rdquo;
+            </p>
+          </div>
 
           <div className="flex flex-wrap items-center gap-4">
             <Button type="submit" disabled={generating}>
@@ -300,84 +358,93 @@ export function OutreachStudio() {
             </span>{" "}
             {genError}
             <p className="mt-1 text-xs text-muted">
-              The drafting service (Senso) may not be configured yet. Your
-              profile still saves normally.
+              The drafting service may not be set up yet. Your profile still
+              saves normally.
             </p>
           </div>
         ) : null}
       </Card>
 
-      {hasDrafts ? (
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle>Who are you reaching?</CardTitle>
-              <CardDescription>
-                Find people from the web, or enter a recipient. Each draft sends
-                from your own email so you can review before it goes.
-              </CardDescription>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => void handleFindPeople()}
-              disabled={peopleLoading}
-            >
-              {peopleLoading ? (
-                <>
-                  <Spinner size={16} />
-                  Searching
-                </>
-              ) : (
-                "Find people to reach"
-              )}
-            </Button>
+      <Card className={hasDrafts ? undefined : "opacity-60"}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle>Step 3: Who are you reaching?</CardTitle>
+            <CardDescription>
+              {hasDrafts
+                ? "Find people from the web, or type in a recipient. Nothing sends automatically; you review every draft in your own email first."
+                : "Generate a draft first, then add who it goes to here."}
+            </CardDescription>
           </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => void handleFindPeople()}
+            disabled={!hasDrafts || peopleLoading}
+          >
+            {peopleLoading ? (
+              <>
+                <Spinner size={16} />
+                Searching
+              </>
+            ) : (
+              "Find people to reach"
+            )}
+          </Button>
+        </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Input
-              name="to_name"
-              label="Recipient name"
-              placeholder="Dr. Ada Lovelace"
-              value={toName}
-              onChange={(e) => setToName(e.target.value)}
-            />
-            <Input
-              name="to_email"
-              label="Recipient email"
-              type="text"
-              inputMode="email"
-              placeholder="ada@example.com"
-              value={toEmail}
-              onChange={(e) => setToEmail(e.target.value)}
-            />
-          </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Input
+            name="to_name"
+            label="Recipient name"
+            placeholder="Dr. Ada Lovelace"
+            value={toName}
+            disabled={!hasDrafts}
+            onChange={(e) => setToName(e.target.value)}
+          />
+          <Input
+            name="to_email"
+            label="Recipient email"
+            type="text"
+            inputMode="email"
+            placeholder="ada@example.com"
+            value={toEmail}
+            disabled={!hasDrafts}
+            error={
+              toEmail.trim() && !emailReady
+                ? "Enter a valid email address."
+                : undefined
+            }
+            onChange={(e) => setToEmail(e.target.value)}
+          />
+        </div>
 
-          {searchedPeople ? (
-            <div className="mt-4">
-              {peopleError ? (
-                <p className="text-sm text-danger">{peopleError}</p>
-              ) : !peopleConfigured ? (
-                <p className="text-sm text-muted">
-                  People search is not configured (Nimble). Enter a recipient
-                  manually above.
+        {hasDrafts && searchedPeople ? (
+          <div className="mt-4">
+            {peopleError ? (
+              <p className="text-sm text-danger">{peopleError}</p>
+            ) : !peopleConfigured ? (
+              <p className="text-sm text-muted">
+                People search is not set up. Enter a recipient manually above.
+              </p>
+            ) : peopleLoading ? null : people.length === 0 ? (
+              <p className="text-sm text-muted">
+                No leads found. Try broader context, or enter a recipient
+                manually.
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-muted">
+                  Leads from the web. Open one to find a contact, then select
+                  it as the recipient. Vet before reaching out.
                 </p>
-              ) : peopleLoading ? null : people.length === 0 ? (
-                <p className="text-sm text-muted">
-                  No leads found. Try broader context, or enter a recipient
-                  manually.
-                </p>
-              ) : (
-                <>
-                  <p className="mb-2 text-xs text-muted">
-                    Leads from the web. Open one to find a contact, then select
-                    it as the recipient. Vet before reaching out.
-                  </p>
-                  <ul className="flex flex-col divide-y divide-black/5">
-                    {people.map((lead, i) => (
+                <ul className="flex flex-col divide-y divide-black/5">
+                  {people.map((lead, i) => {
+                    const leadKey = `${lead.url}-${i}`;
+                    const selected = selectedLeadKey === leadKey;
+                    return (
                       <li
-                        key={`${lead.url}-${i}`}
+                        key={leadKey}
                         className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0"
                       >
                         <div className="min-w-0 flex-1">
@@ -407,23 +474,27 @@ export function OutreachStudio() {
                             ) : null}
                           </div>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => selectLead(lead)}
-                        >
-                          Select
-                        </Button>
+                        {selected ? (
+                          <Badge tone="primary">Selected</Badge>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => selectLead(lead, leadKey)}
+                          >
+                            Select
+                          </Button>
+                        )}
                       </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          ) : null}
-        </Card>
-      ) : null}
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+        ) : null}
+      </Card>
 
       {cards.length > 0 ? (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -467,7 +538,7 @@ export function OutreachStudio() {
                         type="button"
                         size="sm"
                         onClick={() => void handleSend(card, key)}
-                        disabled={!toEmail.trim() || !body.trim()}
+                        disabled={!emailReady || !body.trim()}
                       >
                         Open in email
                       </Button>
@@ -475,9 +546,14 @@ export function OutreachStudio() {
                         <span className="text-xs text-muted">
                           Add a recipient email above to send.
                         </span>
+                      ) : !emailReady ? (
+                        <span className="text-xs text-muted">
+                          That email does not look valid yet.
+                        </span>
                       ) : (
                         <span className="text-xs text-muted">
-                          Opens your mail app to {toEmail}. You review and send.
+                          Opens your mail app to {toEmail}. You review and
+                          send it yourself.
                         </span>
                       )}
                     </div>
@@ -500,7 +576,8 @@ export function OutreachStudio() {
           <div>
             <CardTitle>Recent outreach</CardTitle>
             <CardDescription>
-              Who you reached and when. Sent drafts show the recipient.
+              Drafts you opened in your email app, and when. We track that you
+              opened them, not whether you actually hit send.
             </CardDescription>
           </div>
           <Button
@@ -538,7 +615,7 @@ export function OutreachStudio() {
                     <Badge tone="neutral">{row.channel}</Badge>
                   ) : null}
                   {row.posted ? (
-                    <Badge tone="success">Sent</Badge>
+                    <Badge tone="success">Opened in email</Badge>
                   ) : (
                     <Badge tone="neutral">Drafted</Badge>
                   )}

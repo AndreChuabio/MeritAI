@@ -4,12 +4,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import type { ItemFormValues } from "./types";
+import type { CriterionGuide, ItemFormValues } from "./types";
 
 interface ItemFormProps {
   initial?: Partial<ItemFormValues>;
   submitLabel: string;
   busy?: boolean;
+  guide?: CriterionGuide;
   onSubmit: (values: ItemFormValues) => void;
   onCancel: () => void;
 }
@@ -30,6 +31,7 @@ export function ItemForm({
   initial,
   submitLabel,
   busy = false,
+  guide,
   onSubmit,
   onCancel,
 }: ItemFormProps) {
@@ -74,13 +76,20 @@ export function ItemForm({
         error={titleError}
         autoFocus
       />
-      <Textarea
-        name="description"
-        label="Description"
-        placeholder="What this evidence shows and why it matters for this criterion."
-        value={values.description}
-        onChange={set("description")}
-      />
+      <div className="flex flex-col gap-1.5">
+        <Textarea
+          name="description"
+          label="Description (optional)"
+          placeholder="What this evidence shows and why it matters."
+          value={values.description}
+          onChange={set("description")}
+        />
+        {guide ? (
+          <p className="text-xs leading-relaxed text-muted">
+            For example: {guide.examples.join("; ")}.
+          </p>
+        ) : null}
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           name="evidence_url"

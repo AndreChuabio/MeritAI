@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useUser } from "@/lib/useUser";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { HelpAssistant } from "@/components/HelpAssistant";
 
 interface NavLink {
   href: string;
@@ -113,6 +114,8 @@ export function AppShell({ children }: AppShellProps) {
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
         {children}
       </main>
+
+      <HelpAssistant />
     </div>
   );
 }

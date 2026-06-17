@@ -61,9 +61,11 @@ export function VenueCard({ venue, selected, onSelect }: VenueCardProps) {
             </span>
           ) : null}
         </div>
-        <Badge tone={selected ? "primary" : "lime"}>
-          {formatScore(venue.score)}
-        </Badge>
+        <span title="How closely this venue matches your work, from 0 to 100 percent">
+          <Badge tone={selected ? "primary" : "lime"}>
+            {formatScore(venue.score)}
+          </Badge>
+        </span>
       </div>
 
       {venue.rationale ? (
@@ -73,16 +75,22 @@ export function VenueCard({ venue, selected, onSelect }: VenueCardProps) {
       ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {deadline ? <Badge tone="pink">Deadline {deadline}</Badge> : null}
+        {deadline ? (
+          <span title="Last day to submit to this venue">
+            <Badge tone="pink">Submit by {deadline}</Badge>
+          </span>
+        ) : null}
         {typeof venue.acceptance_rate === "number" ? (
-          <Badge tone="neutral">
-            {Math.round(
-              (venue.acceptance_rate <= 1
-                ? venue.acceptance_rate * 100
-                : venue.acceptance_rate) * 1,
-            )}
-            % accept
-          </Badge>
+          <span title="Share of submissions this venue accepts">
+            <Badge tone="neutral">
+              {Math.round(
+                (venue.acceptance_rate <= 1
+                  ? venue.acceptance_rate * 100
+                  : venue.acceptance_rate) * 1,
+              )}
+              % accepted
+            </Badge>
+          </span>
         ) : null}
         {venue.url ? (
           <a
