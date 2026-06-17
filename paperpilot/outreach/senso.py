@@ -1,6 +1,6 @@
 """Senso API client.
 
-Wraps the small surface PaperPilot's Outreach workflow needs:
+Wraps the small surface Merit's Outreach workflow needs:
   - Brand Kit (GET/PUT)
   - Content Types (list/create/get_or_create)
   - Knowledge Base (ingest)

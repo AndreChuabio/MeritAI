@@ -1,6 +1,6 @@
 """Nimble web-data client.
 
-Wraps three Nimble SDK endpoints we actually use in PaperPilot:
+Wraps three Nimble SDK endpoints we actually use in Merit:
 
   - Search:  POST /v1/search   {query}                                 -> {results, ...}
   - Answers: POST /v1/search   {query, include_answer: true, ...}      -> {answer, results, ...}

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add three Streamlit tabs (Brand / Outreach / Track) to PaperPilot that front-end a Senso workspace, generate purpose-driven outreach drafts via Senso APIs, and surface a visa-progress dashboard combining Google Scholar (academic) and Senso (AI) citation signals.
+**Goal:** Add three Streamlit tabs (Brand / Outreach / Track) to Merit that front-end a Senso workspace, generate purpose-driven outreach drafts via Senso APIs, and surface a visa-progress dashboard combining Google Scholar (academic) and Senso (AI) citation signals.
 
 **Architecture:** New `paperpilot/outreach/` package holds a Senso client, purpose→channel mapping, orchestrator, Scholar mock loader, and ClickHouse audit helpers. A seed script idempotently creates Senso content types + product lines. `app.py` gets three new tabs. Every Senso call is wrapped in the existing `trace.step` context manager so Lapdog/Datadog observability is preserved.
 
@@ -296,7 +296,7 @@ Create `paperpilot/outreach/senso.py`:
 ```python
 """Senso API client.
 
-Wraps the small surface PaperPilot's Outreach workflow needs:
+Wraps the small surface Merit's Outreach workflow needs:
   - Brand Kit (GET/PUT)
   - Content Types (list/create/get_or_create)
   - Knowledge Base (ingest)
@@ -703,11 +703,11 @@ def test_list_product_lines():
     responses.add(
         responses.GET,
         "https://apiv2.senso.ai/api/v1/org/product-lines",
-        json={"items": [{"id": "pl-1", "name": "PaperPilot"}]},
+        json={"items": [{"id": "pl-1", "name": "Merit"}]},
         status=200,
     )
     s = Senso(api_key="k")
-    assert s.list_product_lines() == [{"id": "pl-1", "name": "PaperPilot"}]
+    assert s.list_product_lines() == [{"id": "pl-1", "name": "Merit"}]
 
 
 @responses.activate
@@ -1730,7 +1730,7 @@ with tab_outreach:
 
 - [ ] **Step 13.2: Smoke test**
 
-Run: `make dev`. Pick `BRAND`, type "I just shipped PaperPilot — a tool that turns a GitHub repo into a research paper draft.", click Generate. Expect two cards within ~30s (linkedin_post_brand + x_thread_brand) with real Senso markdown.
+Run: `make dev`. Pick `BRAND`, type "I just shipped Merit — a tool that turns a GitHub repo into a research paper draft.", click Generate. Expect two cards within ~30s (linkedin_post_brand + x_thread_brand) with real Senso markdown.
 
 If Senso returns a `geo_question_id` required error (see spec §16 risk row), update `Senso.generate_sample` to first POST to `/org/geo-questions` and pass that id instead of `context`. Re-run.
 

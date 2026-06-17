@@ -14,7 +14,7 @@ const body = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "PaperPilot",
+  title: "Merit",
   description:
     "Turn your research into published papers, O-1A evidence, and market outreach.",
 };

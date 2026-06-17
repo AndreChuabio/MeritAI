@@ -51,11 +51,11 @@ export default async function Home() {
           <Badge tone="lime">Research to results, on autopilot</Badge>
         </div>
         <h1 className="font-display text-5xl font-bold leading-tight tracking-tight text-ink sm:text-6xl">
-          Turn your repo into a{" "}
-          <span className="text-primary">published paper</span>
+          Turn your work into{" "}
+          <span className="text-primary">recognition</span>
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-lg text-muted">
-          PaperPilot ingests your research, matches it to venues, drafts the
+          Merit ingests your research, matches it to venues, drafts the
           paper, writes your outreach, and tracks your O-1A visa progress.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">

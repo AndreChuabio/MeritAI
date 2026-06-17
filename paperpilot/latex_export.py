@@ -27,7 +27,7 @@ TEMPLATE = dedent(
 
     \title{<<TITLE>>}
     \author{<<AUTHORS>>}
-    \date{Drafted by PaperPilot for \emph{<<VENUE>>} on <<DATE>>}
+    \date{Drafted by Merit for \emph{<<VENUE>>} on <<DATE>>}
 
     \begin{document}
     \maketitle
@@ -89,7 +89,7 @@ def export_paper(
     summary: ResearchSummary,
     venue: VenueMatch,
     sections: dict[str, DraftSection],
-    authors: str = "PaperPilot",
+    authors: str = "Merit",
 ) -> tuple[str, str]:
     """Return (tex_source, bibtex_source) ready to write to disk."""
     abstract = _convert_citations(sections.get("abstract", DraftSection("abstract", "")).text)

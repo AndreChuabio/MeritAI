@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-Extend PaperPilot beyond the paper-draft moment. Once a user has a paper
+Extend Merit beyond the paper-draft moment. Once a user has a paper
 summary in ClickHouse, the Outreach workflow helps them **promote, network,
 and build the dossier** that converts research output into career outcomes —
 including, explicitly, **O-1 / extraordinary-ability visa qualification**.
@@ -20,7 +20,7 @@ generation, log everything, and surface a visa-progress dashboard.
 
 ## 2. Background
 
-- PaperPilot already produces a structured `ResearchSummary` from any GitHub
+- Merit already produces a structured `ResearchSummary` from any GitHub
   repo and stores it in ClickHouse alongside the trace log.
 - Senso (sponsor) offers a brand-management product at `apiv2.senso.ai`
   with: Brand Kit, Knowledge Base, Content Types, Product Lines, async
@@ -139,7 +139,7 @@ Purpose of mirror: resilience if Senso is unreachable mid-demo + audit.
    - `SERVICE` — selling a service or product
 2. "What's this about?" — free-text context (e.g. "I want to apply to keynote at ML4H 2026")
 3. Product Line dropdown — list pulled from Senso `/org/product-lines`
-   (seeded with PaperPilot summaries). Defaults to most recent.
+   (seeded with Merit summaries). Defaults to most recent.
 4. **Generate** button → calls `orchestrator.generate_drafts(...)` which
    for each channel in `PURPOSE_CHANNELS[purpose]`:
    - resolve `content_type_id` (created at seed time, looked up by name)
@@ -361,13 +361,13 @@ Lapdog captures locally; `DD_API_KEY` forwards to Datadog Cloud as today.
 1. Composite score formula (Panel A) — fall back to just the 3 tiles
 2. PDF resume upload — textarea only is fine
 3. Senso Citation Trends tile (Panel C)
-4. Product Line dropdown in Tab 2 — use last PaperPilot summary
+4. Product Line dropdown in Tab 2 — use last Merit summary
 5. **Never cut:** Tab 2 happy path → pick purpose → drafts appear
 
 ## 15. Open questions resolved during brainstorming
 
 - Senso = sponsor; grab API key at their table. ✅
-- Profile source: reuse PaperPilot `ResearchSummary` + manual achievements
+- Profile source: reuse Merit `ResearchSummary` + manual achievements
   textarea. ✅
 - Citation source: Scholar (academic) + Senso (AI) side-by-side. ✅
 - Demo cut: all three tabs, minimal each. ✅

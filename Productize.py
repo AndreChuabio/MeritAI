@@ -1,4 +1,4 @@
-"""PaperPilot Streamlit UI.
+"""Merit Streamlit UI.
 
 Two surfaces in one file:
   - Phase 1 hello-world: a "Ping LLM" button to verify Lapdog + Gateway wires
@@ -35,7 +35,7 @@ user_id = require_auth()
 ui.inject_global_css()
 
 with st.sidebar:
-    ui.sidebar_brand("PaperPilot")
+    ui.sidebar_brand("Merit")
     st.markdown(
         f'<div style="padding: 0 12px; color: var(--fg-muted); '
         f'font-size: 0.82rem; margin-bottom: 8px;">'
@@ -282,7 +282,7 @@ with left:
             ("nanoGPT", "https://github.com/karpathy/nanoGPT"),
             ("transformers", "https://github.com/huggingface/transformers"),
             ("llama.cpp", "https://github.com/ggerganov/llama.cpp"),
-            ("PaperPilot", "https://github.com/AndreChuabio/agentichack"),
+            ("Merit", "https://github.com/AndreChuabio/agentichack"),
         ]
         for col, (label, chip_url) in zip(chip_cols, _CHIPS):
             with col:
