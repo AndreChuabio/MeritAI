@@ -145,6 +145,32 @@ export interface OutreachRow {
   body?: string;
   status?: string;
   created_at?: string;
+  ts?: string | null;
+  posted?: boolean;
+  recipient_name?: string;
+  recipient_contact?: string;
+}
+
+/** A suggested person/lead to reach, from web search. */
+export interface PersonLead {
+  name: string;
+  detail?: string;
+  url?: string;
+  email?: string;
+}
+
+export interface PeopleResponse {
+  configured: boolean;
+  people: PersonLead[];
+}
+
+/** Body for recording a draft sent to a recipient. */
+export interface SentInput {
+  purpose: string;
+  channel?: string;
+  recipient_name?: string;
+  recipient_contact?: string;
+  draft_id?: string;
 }
 
 /* ----- Auth ----- */
