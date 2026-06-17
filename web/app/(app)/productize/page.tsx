@@ -319,6 +319,53 @@ export default function ProductizePage() {
         </Card>
       </section>
 
+      {/* Claude plugin: available as soon as there is a repo, independent of
+          the paper flow. Only needs the repo URL. */}
+      {repoUrl.trim().length > 0 ? (
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Badge tone="lime">Also</Badge>
+            <CardTitle>Package this repo as a Claude plugin</CardTitle>
+          </div>
+          <Card className="flex flex-col gap-3">
+            <CardDescription>
+              Extract a ready-to-install Claude Code plugin from the same repo:
+              skills, slash commands, subagents, hooks, and MCP build prompts,
+              bundled with a plugin.json. A shippable tool counts as an original
+              contribution.
+            </CardDescription>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                variant="lime"
+                onClick={handleExtractPlugin}
+                disabled={pluginLoading}
+              >
+                {pluginLoading ? <Spinner size={16} /> : null}
+                {pluginLoading
+                  ? "Extracting"
+                  : plugin
+                    ? "Re-extract plugin"
+                    : "Create Claude plugin"}
+              </Button>
+              {plugin ? (
+                <Button variant="secondary" onClick={downloadPlugin}>
+                  Download {plugin.plugin_name || "plugin"}.zip
+                </Button>
+              ) : null}
+            </div>
+            {plugin ? (
+              <p className="text-xs text-muted">
+                {plugin.manifest?.description ??
+                  `Manifest: ${plugin.manifest?.name ?? plugin.plugin_name}`}
+              </p>
+            ) : null}
+            {pluginError ? (
+              <p className="text-sm text-danger">{pluginError}</p>
+            ) : null}
+          </Card>
+        </section>
+      ) : null}
+
       {/* Step 1b: Editable summary */}
       {summaryReady ? (
         <section className="flex flex-col gap-4">
@@ -425,91 +472,54 @@ export default function ProductizePage() {
             <Badge tone="primary">4</Badge>
             <CardTitle>Export</CardTitle>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="flex flex-col gap-3">
-              <CardTitle>LaTeX paper</CardTitle>
-              <CardDescription>
-                Generate a .tex manuscript and matching .bib bibliography from
-                the streamed draft.
-              </CardDescription>
-              <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                <Button onClick={handleExport} disabled={exportLoading}>
-                  {exportLoading ? <Spinner size={16} /> : null}
-                  {exportLoading
-                    ? "Building"
-                    : exportResult
-                      ? "Rebuild"
-                      : "Build LaTeX"}
-                </Button>
-                {exportResult ? (
-                  <>
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        downloadText(
-                          exportResult.tex,
-                          "paper.tex",
-                          "application/x-tex",
-                        )
-                      }
-                    >
-                      Download .tex
-                    </Button>
-                    <Button
-                      variant="lime"
-                      onClick={() =>
-                        downloadText(
-                          exportResult.bib,
-                          "paper.bib",
-                          "application/x-bibtex",
-                        )
-                      }
-                    >
-                      Download .bib
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-              {exportError ? (
-                <p className="text-sm text-danger">{exportError}</p>
-              ) : null}
-            </Card>
-
-            <Card className="flex flex-col gap-3">
-              <CardTitle>Plugin package</CardTitle>
-              <CardDescription>
-                Extract a runnable plugin from the same repo and download it as
-                a zip.
-              </CardDescription>
-              <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                <Button
-                  onClick={handleExtractPlugin}
-                  disabled={pluginLoading}
-                >
-                  {pluginLoading ? <Spinner size={16} /> : null}
-                  {pluginLoading
-                    ? "Extracting"
-                    : plugin
-                      ? "Re-extract"
-                      : "Extract plugin"}
-                </Button>
-                {plugin ? (
-                  <Button variant="secondary" onClick={downloadPlugin}>
-                    Download {plugin.plugin_name || "plugin"}.zip
+          <Card className="flex flex-col gap-3">
+            <CardTitle>LaTeX paper</CardTitle>
+            <CardDescription>
+              Generate a .tex manuscript and matching .bib bibliography from the
+              streamed draft, ready for Overleaf.
+            </CardDescription>
+            <div className="mt-auto flex flex-wrap gap-2 pt-2">
+              <Button onClick={handleExport} disabled={exportLoading}>
+                {exportLoading ? <Spinner size={16} /> : null}
+                {exportLoading
+                  ? "Building"
+                  : exportResult
+                    ? "Rebuild"
+                    : "Build LaTeX"}
+              </Button>
+              {exportResult ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      downloadText(
+                        exportResult.tex,
+                        "paper.tex",
+                        "application/x-tex",
+                      )
+                    }
+                  >
+                    Download .tex
                   </Button>
-                ) : null}
-              </div>
-              {plugin ? (
-                <p className="text-xs text-muted">
-                  {plugin.manifest?.description ??
-                    `Manifest: ${plugin.manifest?.name ?? plugin.plugin_name}`}
-                </p>
+                  <Button
+                    variant="lime"
+                    onClick={() =>
+                      downloadText(
+                        exportResult.bib,
+                        "paper.bib",
+                        "application/x-bibtex",
+                      )
+                    }
+                  >
+                    Download .bib
+                  </Button>
+                </>
               ) : null}
-              {pluginError ? (
-                <p className="text-sm text-danger">{pluginError}</p>
-              ) : null}
-            </Card>
-          </div>
+            </div>
+            {exportError ? (
+              <p className="text-sm text-danger">{exportError}</p>
+            ) : null}
+          </Card>
         </section>
       ) : null}
     </div>
