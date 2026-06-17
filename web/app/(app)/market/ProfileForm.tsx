@@ -79,7 +79,12 @@ function fromProfile(source: Profile): MarketProfile {
   };
 }
 
-export function ProfileForm() {
+interface ProfileFormProps {
+  /** Called after the profile saves successfully, to advance the flow. */
+  onSaved?: () => void;
+}
+
+export function ProfileForm({ onSaved }: ProfileFormProps) {
   const [profile, setProfile] = useState<MarketProfile>(EMPTY_PROFILE);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -132,6 +137,7 @@ export function ProfileForm() {
       const result = await api.market.putProfile(payload);
       setProfile(fromProfile(result));
       setSave({ kind: "saved" });
+      onSaved?.();
     } catch (err: unknown) {
       setSave({
         kind: "error",
@@ -155,9 +161,10 @@ export function ProfileForm() {
     <Card>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <CardTitle>Your author profile</CardTitle>
+          <CardTitle>Step 1: Your profile</CardTitle>
           <CardDescription>
-            This seeds every outreach draft. Keep your voice and links current.
+            This is what every draft is written from. Name and About are
+            required; everything else is optional but makes drafts sharper.
           </CardDescription>
         </div>
       </div>
@@ -172,14 +179,14 @@ export function ProfileForm() {
         <div className="grid gap-5 sm:grid-cols-2">
           <Input
             name="name"
-            label="Name"
+            label="Name (required)"
             placeholder="Ada Lovelace"
             value={profile.name}
             onChange={(e) => update("name", e.target.value)}
           />
           <Input
             name="title"
-            label="Title"
+            label="Title (optional)"
             placeholder="Research Engineer"
             value={profile.title}
             onChange={(e) => update("title", e.target.value)}
@@ -188,7 +195,7 @@ export function ProfileForm() {
 
         <Textarea
           name="about"
-          label="About"
+          label="About (required)"
           placeholder="A few sentences on who you are and what you build."
           value={profile.about}
           onChange={(e) => update("about", e.target.value)}
@@ -196,7 +203,7 @@ export function ProfileForm() {
 
         <Input
           name="voice_tone"
-          label="Voice and tone"
+          label="Voice and tone (optional)"
           placeholder="Warm, direct, a little playful"
           value={profile.voice_tone}
           onChange={(e) => update("voice_tone", e.target.value)}
@@ -205,7 +212,7 @@ export function ProfileForm() {
         <div className="grid gap-5 sm:grid-cols-2">
           <Input
             name="github_url"
-            label="GitHub URL"
+            label="GitHub URL (optional)"
             type="text"
             inputMode="url"
             placeholder="https://github.com/you"
@@ -214,7 +221,7 @@ export function ProfileForm() {
           />
           <Input
             name="linkedin_url"
-            label="LinkedIn URL"
+            label="LinkedIn URL (optional)"
             type="text"
             inputMode="url"
             placeholder="https://linkedin.com/in/you"
@@ -223,7 +230,7 @@ export function ProfileForm() {
           />
           <Input
             name="scholar_url"
-            label="Google Scholar URL"
+            label="Google Scholar URL (optional)"
             type="text"
             inputMode="url"
             placeholder="https://scholar.google.com/..."
@@ -232,7 +239,7 @@ export function ProfileForm() {
           />
           <Input
             name="site_url"
-            label="Personal site URL"
+            label="Personal site URL (optional)"
             type="text"
             inputMode="url"
             placeholder="https://you.dev"
@@ -243,7 +250,7 @@ export function ProfileForm() {
 
         <Textarea
           name="resume_text"
-          label="Resume text"
+          label="Resume text (optional)"
           placeholder="Paste your resume or a longer bio for richer drafts."
           className="min-h-40"
           value={profile.resume_text}

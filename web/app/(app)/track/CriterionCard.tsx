@@ -5,7 +5,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { ItemForm } from "./ItemForm";
+import { CRITERIA_GUIDE } from "./types";
 import type {
+  CriterionGuide,
   ItemFormValues,
   LiveCriterionGroup,
   LiveEvidenceItem,
@@ -13,6 +15,8 @@ import type {
 
 interface CriterionCardProps {
   group: LiveCriterionGroup;
+  /** When provided, expands the card on mount (used to steer first-timers). */
+  defaultOpen?: boolean;
   onCreate: (values: ItemFormValues) => Promise<void>;
   onUpdate: (id: string, values: ItemFormValues) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -37,12 +41,14 @@ function formatDate(value: string | null): string | null {
  */
 export function CriterionCard({
   group,
+  defaultOpen = false,
   onCreate,
   onUpdate,
   onDelete,
   onNarrative,
 }: CriterionCardProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const guide: CriterionGuide | undefined = CRITERIA_GUIDE[group.criterion];
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
@@ -119,34 +125,50 @@ export function CriterionCard({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
+        title={group.label}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-primary-50/40"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <span
             aria-hidden
-            className={`inline-block h-2.5 w-2.5 rounded-full ${
-              group.satisfied ? "bg-success" : "bg-black/15"
+            className={`mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+              itemCount > 0 ? "bg-success" : "bg-black/15"
             }`}
           />
-          <span className="font-display text-base font-semibold text-ink">
-            {group.label}
-          </span>
-          {group.satisfied ? (
-            <Badge tone="success">Satisfied</Badge>
-          ) : (
-            <Badge tone="neutral">Building</Badge>
-          )}
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-base font-semibold text-ink">
+                {guide ? guide.name : group.label}
+              </span>
+              {itemCount > 0 ? (
+                <Badge tone="success">Has evidence</Badge>
+              ) : (
+                <Badge tone="neutral">Not started</Badge>
+              )}
+            </div>
+            {guide ? (
+              <span className="max-w-xl text-xs leading-relaxed text-muted">
+                {guide.explanation}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-3 text-muted">
+        <div className="flex shrink-0 items-center gap-3 text-muted">
           <span className="text-sm">
             {itemCount} {itemCount === 1 ? "item" : "items"}
           </span>
-          <span
+          <svg
             aria-hidden
-            className={`text-xs transition-transform ${open ? "rotate-180" : ""}`}
+            viewBox="0 0 16 16"
+            className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           >
-            v
-          </span>
+            <path d="M4 6l4 4 4-4" />
+          </svg>
         </div>
       </button>
 
@@ -159,10 +181,19 @@ export function CriterionCard({
           ) : null}
 
           {itemCount === 0 && !adding ? (
-            <p className="rounded-2xl border border-dashed border-black/10 px-4 py-5 text-center text-sm text-muted">
-              No evidence declared for this criterion yet. Add your first item
-              to start building the record.
-            </p>
+            <div className="flex flex-col items-center gap-1 rounded-2xl border border-dashed border-black/10 px-4 py-5 text-center">
+              <p className="text-sm text-muted">
+                Nothing here yet.{" "}
+                {guide
+                  ? `Add anything that shows ${guide.name.toLowerCase()}.`
+                  : "Add your first item to start building the record."}
+              </p>
+              {guide ? (
+                <p className="text-xs text-muted">
+                  For example: {guide.examples.join("; ")}.
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           <ul className="flex flex-col gap-3">
@@ -180,6 +211,7 @@ export function CriterionCard({
                       initial={editValues(item)}
                       submitLabel="Save changes"
                       busy={isBusy}
+                      guide={guide}
                       onSubmit={(values) => handleUpdate(item.id, values)}
                       onCancel={() => setEditingId(null)}
                     />
@@ -238,32 +270,40 @@ export function CriterionCard({
             <ItemForm
               submitLabel="Add evidence"
               busy={creating}
+              guide={guide}
               onSubmit={handleCreate}
               onCancel={() => setAdding(false)}
             />
           ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setAdding(true)}
-              >
-                Add evidence
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNarrative}
-                disabled={narrativeLoading || itemCount === 0}
-              >
-                {narrativeLoading ? (
-                  <>
-                    <Spinner size={14} /> Drafting
-                  </>
-                ) : (
-                  "Draft narrative"
-                )}
-              </Button>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setAdding(true)}
+                >
+                  Add evidence
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNarrative}
+                  disabled={narrativeLoading || itemCount === 0}
+                >
+                  {narrativeLoading ? (
+                    <>
+                      <Spinner size={14} /> Drafting
+                    </>
+                  ) : (
+                    "Draft narrative"
+                  )}
+                </Button>
+              </div>
+              {itemCount === 0 ? (
+                <p className="text-xs text-muted">
+                  Add at least one item to draft a narrative for this criterion.
+                </p>
+              ) : null}
             </div>
           )}
 

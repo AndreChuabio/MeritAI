@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import type {
+  AssistHandlers,
+  AssistSurface,
   Citation,
   DraftCard,
   DraftDone,
@@ -224,6 +226,116 @@ export const api = {
     } catch (err) {
       if ((err as Error)?.name !== "AbortError") {
         handlers.onError((err as Error)?.message ?? "Draft stream aborted");
+      }
+    }
+  },
+
+  /**
+   * Streams a coaching answer from the "Help me" assistant via SSE.
+   * The backend emits events: delta, done, error.
+   *
+   * `context` is the current page/surface state so the answer is relevant;
+   * pass the pathname and any lightweight counts the surface knows about.
+   */
+  async assist(
+    question: string,
+    surface: AssistSurface,
+    handlers: AssistHandlers,
+    context?: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const token = await getAccessToken();
+    const response = await fetch(`${API_BASE_URL}/assist`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify({
+        question,
+        surface,
+        ...(context ? { context } : {}),
+      }),
+      signal,
+    });
+
+    if (!response.ok || !response.body) {
+      const detail = response.body
+        ? await safeErrorDetail(response)
+        : `Assist stream failed (${response.status})`;
+      handlers.onError(detail);
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    const dispatch = (rawEvent: string) => {
+      let eventName = "message";
+      const dataLines: string[] = [];
+      for (const line of rawEvent.split("\n")) {
+        if (line.startsWith("event:")) {
+          eventName = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          dataLines.push(line.slice(5).replace(/^ /, ""));
+        }
+      }
+      const dataStr = dataLines.join("\n");
+      if (!dataStr && eventName === "message") return;
+
+      let payload: unknown = dataStr;
+      if (dataStr) {
+        try {
+          payload = JSON.parse(dataStr);
+        } catch {
+          payload = dataStr;
+        }
+      }
+
+      switch (eventName) {
+        case "delta": {
+          const p = payload as { text?: string };
+          handlers.onDelta(p.text ?? "");
+          break;
+        }
+        case "done": {
+          handlers.onDone();
+          break;
+        }
+        case "error": {
+          const p = payload as { message?: string } | string;
+          const message =
+            typeof p === "string"
+              ? p
+              : (p.message ?? "Assist stream error");
+          handlers.onError(message);
+          break;
+        }
+        default:
+          break;
+      }
+    };
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let separatorIndex: number;
+        while ((separatorIndex = buffer.indexOf("\n\n")) !== -1) {
+          const rawEvent = buffer.slice(0, separatorIndex);
+          buffer = buffer.slice(separatorIndex + 2);
+          if (rawEvent.trim()) dispatch(rawEvent);
+        }
+      }
+      const tail = buffer.trim();
+      if (tail) dispatch(tail);
+    } catch (err) {
+      if ((err as Error)?.name !== "AbortError") {
+        handlers.onError((err as Error)?.message ?? "Assist stream aborted");
       }
     }
   },

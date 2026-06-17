@@ -189,3 +189,22 @@ export interface DraftHandlers {
   onDone: (done: DraftDone) => void;
   onError: (error: string) => void;
 }
+
+/* ----- Assist (Help me) streaming ----- */
+
+/** Which Merit surface the question is asked from. */
+export type AssistSurface = "track" | "productize" | "market";
+
+/** Request body for the streaming /assist endpoint. */
+export interface AssistRequest {
+  question: string;
+  surface: AssistSurface;
+  context?: Record<string, unknown>;
+}
+
+/** Callbacks the assist stream drives as the coaching answer arrives. */
+export interface AssistHandlers {
+  onDelta: (text: string) => void;
+  onDone: () => void;
+  onError: (error: string) => void;
+}

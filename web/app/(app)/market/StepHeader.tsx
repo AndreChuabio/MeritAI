@@ -9,29 +9,17 @@ export interface Step {
   label: string;
 }
 
-const PRODUCTIZE_STEPS: Step[] = [
-  { id: 1, label: "Ingest" },
-  { id: 2, label: "Match" },
-  { id: 3, label: "Draft" },
-  { id: 4, label: "Export" },
-];
-
 interface StepHeaderProps {
+  steps: Step[];
   current: number;
-  /** Override the default repo -> paper steps (used by other surfaces). */
-  steps?: Step[];
 }
 
 /**
- * Horizontal step indicator for a multi-step flow.
- * `current` is the 1-based index of the active step. Defaults to the
- * repo -> paper steps, but accepts a `steps` prop so other surfaces
- * (such as Market) can reuse the same indicator.
+ * Horizontal step indicator. `steps` is the ordered list of stages and
+ * `current` is the 1-based index of the active step. Shared visual language
+ * with the rest of the app: lime for done, primary for active, muted for todo.
  */
-export function StepHeader({
-  current,
-  steps = PRODUCTIZE_STEPS,
-}: StepHeaderProps): ReactNode {
+export function StepHeader({ steps, current }: StepHeaderProps): ReactNode {
   return (
     <ol className="flex flex-wrap items-center gap-2 sm:gap-3">
       {steps.map((step, index) => {

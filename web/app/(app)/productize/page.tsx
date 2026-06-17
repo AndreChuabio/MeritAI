@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import type {
   Citation,
@@ -124,11 +125,11 @@ export default function ProductizePage() {
       setSummary({ ...EMPTY_SUMMARY, ...result.summary });
       setSummaryReady(true);
       if (result.notes) setIngestNotice(result.notes);
-    } catch (err) {
+    } catch {
       // Ingest can fail when the server GitHub token is unconfigured. Surface a
-      // friendly note and let the user write the summary by hand.
+      // friendly note (no raw error) and let the user write the summary by hand.
       setIngestNotice(
-        `Repo ingest is being configured (${errorMessage(err)}). You can paste or write the summary below and continue.`,
+        "We could not read that repo automatically right now. No problem, you can write the summary below and continue.",
       );
       setSummary((prev) => (summaryHasContent(prev) ? prev : EMPTY_SUMMARY));
       setSummaryReady(true);
@@ -277,6 +278,30 @@ export default function ProductizePage() {
           plugin.
         </p>
         <StepHeader current={currentStep} />
+
+        <Card className="flex flex-col gap-3 bg-primary-50/60">
+          <CardTitle>Why this helps your O-1A case</CardTitle>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <Badge tone="primary">Published articles</Badge>
+              <p className="text-sm leading-relaxed text-muted">
+                Turning your repo into a paper builds toward the O-1A criterion
+                for authorship of scholarly articles in your field.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Badge tone="lime">Original contributions</Badge>
+              <p className="text-sm leading-relaxed text-muted">
+                Packaging it as a shippable Claude plugin builds toward the
+                criterion for original contributions of major significance.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted">
+            New to the O-1A criteria? You do not need to know them. Follow the
+            steps below and Merit maps the output to your case.
+          </p>
+        </Card>
       </header>
 
       {/* Step 1: Ingest */}
@@ -319,60 +344,15 @@ export default function ProductizePage() {
         </Card>
       </section>
 
-      {/* Claude plugin: available as soon as there is a repo, independent of
-          the paper flow. Only needs the repo URL. */}
-      {repoUrl.trim().length > 0 ? (
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Badge tone="lime">Also</Badge>
-            <CardTitle>Package this repo as a Claude plugin</CardTitle>
-          </div>
-          <Card className="flex flex-col gap-3">
-            <CardDescription>
-              Extract a ready-to-install Claude Code plugin from the same repo:
-              skills, slash commands, subagents, hooks, and MCP build prompts,
-              bundled with a plugin.json. A shippable tool counts as an original
-              contribution.
-            </CardDescription>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                variant="lime"
-                onClick={handleExtractPlugin}
-                disabled={pluginLoading}
-              >
-                {pluginLoading ? <Spinner size={16} /> : null}
-                {pluginLoading
-                  ? "Extracting"
-                  : plugin
-                    ? "Re-extract plugin"
-                    : "Create Claude plugin"}
-              </Button>
-              {plugin ? (
-                <Button variant="secondary" onClick={downloadPlugin}>
-                  Download {plugin.plugin_name || "plugin"}.zip
-                </Button>
-              ) : null}
-            </div>
-            {plugin ? (
-              <p className="text-xs text-muted">
-                {plugin.manifest?.description ??
-                  `Manifest: ${plugin.manifest?.name ?? plugin.plugin_name}`}
-              </p>
-            ) : null}
-            {pluginError ? (
-              <p className="text-sm text-danger">{pluginError}</p>
-            ) : null}
-          </Card>
-        </section>
-      ) : null}
-
-      {/* Step 1b: Editable summary */}
+      {/* Step 1b: Editable summary, folded into step 1. */}
       {summaryReady ? (
         <section className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <Badge tone="primary">1</Badge>
             <CardTitle>Research summary</CardTitle>
-            <span className="text-sm text-muted">edit anything before matching</span>
+            <span className="text-sm text-muted">
+              edit anything before matching
+            </span>
           </div>
           <SummaryEditor
             summary={summary}
@@ -403,6 +383,11 @@ export default function ProductizePage() {
             <Badge tone="primary">2</Badge>
             <CardTitle>Pick a venue</CardTitle>
           </div>
+          <CardDescription>
+            A venue is a journal, conference, or workshop where your paper could
+            be published. The fit score is how closely each one matches your
+            work. Pick the one you want to write toward.
+          </CardDescription>
           {matchError ? (
             <Card className="bg-danger/5">
               <CardDescription className="text-danger">
@@ -475,8 +460,11 @@ export default function ProductizePage() {
           <Card className="flex flex-col gap-3">
             <CardTitle>LaTeX paper</CardTitle>
             <CardDescription>
-              Generate a .tex manuscript and matching .bib bibliography from the
-              streamed draft, ready for Overleaf.
+              Generate the files for a finished manuscript: a .tex file (the
+              paper, written in LaTeX, the typesetting format journals expect)
+              and a matching .bib file (its list of references). Both drop
+              straight into Overleaf, a free in-browser LaTeX editor, so you can
+              format and submit without installing anything.
             </CardDescription>
             <div className="mt-auto flex flex-wrap gap-2 pt-2">
               <Button onClick={handleExport} disabled={exportLoading}>
@@ -518,6 +506,73 @@ export default function ProductizePage() {
             </div>
             {exportError ? (
               <p className="text-sm text-danger">{exportError}</p>
+            ) : null}
+            {exportResult ? (
+              <p className="text-sm text-muted">
+                Done. Log this as evidence in your{" "}
+                <Link
+                  href="/track"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Track ledger
+                </Link>{" "}
+                so it counts toward your O-1A case.
+              </p>
+            ) : null}
+          </Card>
+        </section>
+      ) : null}
+
+      {/* Optional: package the repo as a Claude plugin. Available once a
+          summary exists, folded after the paper flow as a side output. */}
+      {summaryReady ? (
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Badge tone="lime">Optional</Badge>
+            <CardTitle>Package this repo as a Claude plugin</CardTitle>
+          </div>
+          <Card className="flex flex-col gap-3">
+            <CardDescription>
+              Bundle the same repo into a ready-to-install Claude Code plugin:
+              skills (reusable instructions Claude can load), slash commands
+              (shortcuts you type to run a task), subagents (helpers that run on
+              their own), hooks (actions that fire automatically on events), and
+              MCP build prompts (setup for connecting Claude to external tools).
+              It all ships as one plugin.json file. A tool other people can
+              install counts as an original contribution.
+            </CardDescription>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                variant="lime"
+                onClick={handleExtractPlugin}
+                disabled={pluginLoading || repoUrl.trim().length === 0}
+              >
+                {pluginLoading ? <Spinner size={16} /> : null}
+                {pluginLoading
+                  ? "Extracting"
+                  : plugin
+                    ? "Re-extract plugin"
+                    : "Create Claude plugin"}
+              </Button>
+              {plugin ? (
+                <Button variant="secondary" onClick={downloadPlugin}>
+                  Download {plugin.plugin_name || "plugin"}.zip
+                </Button>
+              ) : null}
+            </div>
+            {repoUrl.trim().length === 0 ? (
+              <p className="text-xs text-muted">
+                Add a repo URL in step 1 to package a plugin.
+              </p>
+            ) : null}
+            {plugin ? (
+              <p className="text-xs text-muted">
+                {plugin.manifest?.description ??
+                  `Manifest: ${plugin.manifest?.name ?? plugin.plugin_name}`}
+              </p>
+            ) : null}
+            {pluginError ? (
+              <p className="text-sm text-danger">{pluginError}</p>
             ) : null}
           </Card>
         </section>
