@@ -9,14 +9,27 @@ the data layer moves; LLM/Senso logic stays in paperpilot.outreach.*.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
-from paperpilot import supabase_client, trace
+from paperpilot import nimble_client, supabase_client, trace
 from paperpilot.outreach.orchestrator import DraftCard, generate_drafts
 from paperpilot.outreach.purpose import Purpose
 from paperpilot.outreach.senso import Senso
+
+# Loose email matcher for pulling a contact out of a web-search snippet.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+# Per-purpose phrasing that turns the user's context into a people-finding query.
+_PEOPLE_QUERY: dict[str, str] = {
+    "VISA": "experts, reference-letter writers, and program organizers in",
+    "CAREER": "hiring managers, recruiters, and engineering leads working on",
+    "NETWORK": "researchers and practitioners working on",
+    "BRAND": "creators, podcast hosts, and community leaders covering",
+    "SERVICE": "founders and teams who might need help with",
+}
 
 # Profile columns in upsert order. updated_at is set by the writer.
 _PROFILE_FIELDS = [
@@ -133,6 +146,8 @@ def insert_outreach_log(
     sample_job_id: str,
     draft_id: str = "",
     posted: bool = False,
+    recipient_name: str = "",
+    recipient_contact: str = "",
     conn: Any | None = None,
 ) -> None:
     """Insert one outreach_log row scoped to user_id."""
@@ -143,16 +158,74 @@ def insert_outreach_log(
             cur.execute(
                 "INSERT INTO outreach_log "
                 "(user_id, purpose, channel, content_type_id, "
-                "sample_job_id, draft_id, posted) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                "sample_job_id, draft_id, posted, "
+                "recipient_name, recipient_contact) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     user_id, purpose, channel, content_type_id,
                     sample_job_id, draft_id, posted,
+                    recipient_name, recipient_contact,
                 ),
             )
     finally:
         if own_conn:
             conn.close()
+
+
+def log_sent(
+    user_id: str,
+    purpose: str,
+    channel: str,
+    recipient_name: str,
+    recipient_contact: str,
+    draft_id: str = "",
+    conn: Any | None = None,
+) -> None:
+    """Record that the caller sent a draft to a named recipient (posted=True)."""
+    insert_outreach_log(
+        user_id=user_id,
+        purpose=purpose,
+        channel=channel,
+        content_type_id="",
+        sample_job_id="",
+        draft_id=draft_id,
+        posted=True,
+        recipient_name=recipient_name,
+        recipient_contact=recipient_contact,
+        conn=conn,
+    )
+
+
+def suggest_people(
+    user_id: str, purpose: str, context: str, limit: int = 6
+) -> dict[str, Any]:
+    """Suggest people/orgs to reach via Nimble web search.
+
+    Returns {"configured": bool, "people": [{name, detail, url, email}]}. When
+    Nimble is unconfigured, returns configured=False with an empty list so the
+    UI can explain why instead of erroring. Emails are best-effort extracted
+    from result snippets; many results will have none.
+    """
+    if not nimble_client.is_configured():
+        return {"configured": False, "people": []}
+    qualifier = _PEOPLE_QUERY.get(
+        purpose.upper(), "people and organizations working on"
+    )
+    query = f"{qualifier} {context}".strip()
+    session_id = trace.new_session(user_id)
+    hits = nimble_client.search(query, session_id, k=limit) or []
+    people: list[dict[str, str]] = []
+    for hit in hits:
+        emails = _EMAIL_RE.findall(hit.snippet or "")
+        people.append(
+            {
+                "name": hit.title,
+                "detail": hit.snippet,
+                "url": hit.url,
+                "email": emails[0] if emails else "",
+            }
+        )
+    return {"configured": True, "people": people}
 
 
 def list_outreach_log(
@@ -165,7 +238,8 @@ def list_outreach_log(
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT id, ts, purpose, channel, content_type_id, "
-                "sample_job_id, draft_id, posted FROM outreach_log "
+                "sample_job_id, draft_id, posted, "
+                "recipient_name, recipient_contact FROM outreach_log "
                 "WHERE user_id = %s ORDER BY ts DESC LIMIT %s",
                 (user_id, limit),
             )
@@ -183,6 +257,8 @@ def list_outreach_log(
             "sample_job_id": r[5],
             "draft_id": r[6],
             "posted": r[7],
+            "recipient_name": r[8],
+            "recipient_contact": r[9],
         }
         for r in rows
     ]

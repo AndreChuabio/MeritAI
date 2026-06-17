@@ -11,9 +11,11 @@ import type {
   IngestResult,
   MeResponse,
   OutreachRow,
+  PeopleResponse,
   PluginResult,
   Profile,
   ResearchSummary,
+  SentInput,
   Venue,
 } from "@/lib/types";
 
@@ -328,6 +330,26 @@ export const api = {
 
     async outreachLog(): Promise<OutreachRow[]> {
       return requestJson<OutreachRow[]>("/market/outreach/log");
+    },
+
+    async suggestPeople(
+      purpose: string,
+      context: string,
+    ): Promise<PeopleResponse> {
+      return requestJson<PeopleResponse>("/market/outreach/people", {
+        method: "POST",
+        body: { purpose, context },
+      });
+    },
+
+    async logSent(input: SentInput): Promise<void> {
+      const response = await authedFetch("/market/outreach/sent", {
+        method: "POST",
+        body: input,
+      });
+      if (!response.ok) {
+        throw new Error(await safeErrorDetail(response));
+      }
     },
   },
 };
