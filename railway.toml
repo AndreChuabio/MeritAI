@@ -1,4 +1,4 @@
-# Railway deploy config for PaperPilot.
+# Railway deploy config for Merit.
 #
 # Builder: Nixpacks auto-detects Python (we use uv for dependency install
 # via nixpacks.toml). Start command wraps Streamlit in `ddtrace-run` and

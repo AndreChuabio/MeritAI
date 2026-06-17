@@ -5,7 +5,7 @@ returns a `PipelineResult`. The Streamlit UI is the visible surface, but
 this orchestrator is also used by:
 
   - scripts/demo_precompute.py (caches a full run for DEMO_MODE)
-  - scripts/meta_flex.py (runs PaperPilot on its own repo at 16:25)
+  - scripts/meta_flex.py (runs Merit on its own repo at 16:25)
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""PaperPilot FastAPI backend.
+"""Merit FastAPI backend.
 
 First Phase 2 slice: health, identity, and venue matching over Supabase.
 Ingest / draft / evidence / outreach endpoints follow in subsequent slices.
@@ -21,7 +21,7 @@ from paperpilot.llm_ingest import ResearchSummary
 
 load_dotenv()
 
-app = FastAPI(title="PaperPilot API", version="0.1.0")
+app = FastAPI(title="Merit API", version="0.1.0")
 
 # CORS for the Next.js frontend. Explicit origins (localhost + the production
 # domain) come from FRONTEND_ORIGINS; the regex additionally allows every

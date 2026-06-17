@@ -1,4 +1,4 @@
-"""Passcode-style auth shim for PaperPilot.
+"""Passcode-style auth shim for Merit.
 
 Two real users (Andre and Nikki) plus a dev fallback. Designed as a temporary
 shim that can be swapped for a real provider (Clerk on Vercel Marketplace was
@@ -121,7 +121,7 @@ def _render_login_form(users: List[_UserRecord], is_dev_fallback: bool) -> None:
     # Centered container so it reads as an intentional sign-in screen.
     left, middle, right = st.columns([1, 2, 1])
     with middle:
-        st.markdown("## PaperPilot")
+        st.markdown("## Merit")
         st.caption("Sign in to continue.")
 
         names = [user["name"] for user in users]

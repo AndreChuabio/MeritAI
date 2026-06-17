@@ -1,4 +1,4 @@
--- PaperPilot initial schema on Supabase Postgres + pgvector.
+-- Merit initial schema on Supabase Postgres + pgvector.
 -- Ported from the ClickHouse schema in paperpilot/clickhouse_client.py.
 --
 -- Design notes:

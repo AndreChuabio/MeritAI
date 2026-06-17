@@ -54,7 +54,7 @@ ping-cloud:
 precompute:
 	uv run python scripts/demo_precompute.py $(URL)
 
-# Closing meta-flex move: run PaperPilot on its own repo, save .tex + .bib to submission/
+# Closing meta-flex move: run Merit on its own repo, save .tex + .bib to submission/
 meta:
 	uv run python scripts/meta_flex.py
 

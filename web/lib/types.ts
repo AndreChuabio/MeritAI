@@ -1,5 +1,5 @@
 /**
- * Shared types for the PaperPilot frontend.
+ * Shared types for the Merit frontend.
  * These mirror the FastAPI backend contract at NEXT_PUBLIC_API_BASE_URL.
  */
 

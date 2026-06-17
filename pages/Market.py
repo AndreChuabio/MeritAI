@@ -40,7 +40,7 @@ user_id = require_auth()
 ui.inject_global_css()
 
 with st.sidebar:
-    ui.sidebar_brand("PaperPilot")
+    ui.sidebar_brand("Merit")
 
 ui.hero(
     "Market",

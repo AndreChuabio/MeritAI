@@ -1,4 +1,4 @@
-"""PaperPilot UI helpers.
+"""Merit UI helpers.
 
 Presentation-only module. Holds the global CSS blob and a small set of
 render helpers used across Productize, Market, and Track. Keep this tight:
@@ -314,7 +314,7 @@ code, pre, .stCode, .stJson {
 }
 
 /* ------------------------------------------------------------------
-   PaperPilot custom components
+   Merit custom components
    ------------------------------------------------------------------ */
 .pp-hero {
     display: flex;
@@ -514,7 +514,7 @@ def hero(title: str, subtitle: Optional[str] = None) -> None:
     )
 
 
-def sidebar_brand(label: str = "PaperPilot") -> None:
+def sidebar_brand(label: str = "Merit") -> None:
     """Render the sidebar brand block (diamond + name) above the nav."""
     st.markdown(
         f'<div class="pp-sidebar-brand">'

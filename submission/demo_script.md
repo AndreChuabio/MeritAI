@@ -1,4 +1,4 @@
-# Demo Script — PaperPilot / Productionize Your Product
+# Demo Script — Merit / Productionize Your Product
 
 NYC Agentic Engineering Hack, 2026-05-23.
 
@@ -25,7 +25,7 @@ NYC Agentic Engineering Hack, 2026-05-23.
 | 0:45 | Sidebar → Market page | "Same agentic spine, different output. Market hits a Senso brand-kit knowledge base to draft outreach for talks, collaborations, visa applications. Every draft inherits the user's voice." |
 | 1:00 | Sidebar → Track page | "Track aggregates everything into an O-1 and National Interest Waiver progress dashboard — Scholar citations, drafts posted versus drafted, USCIS evidence categories. The researcher publishes, builds their brand, and watches their case fill in." |
 | 1:15 | Productize tab → point to right-rail pill + trace | "Cost per paper: under five cents. Every LLM call traced by Lapdog locally, forwarded to Datadog LLM Observability cloud — one span end-to-end. Three retrieval systems with zero coupling: ClickHouse for what we own, Senso for what we license, Nimble for what's on the live web." |
-| 1:25 | Open submission/paperpilot.tex in GitHub tab | "And we ran PaperPilot on its own repo. That's the paper it wrote about itself, going to EMNLP 2026 — attached to our Devpost. Live at paperpilot.up.railway.app." |
+| 1:25 | Open submission/paperpilot.tex in GitHub tab | "And we ran Merit on its own repo. That's the paper it wrote about itself, going to EMNLP 2026 — attached to our Devpost. Live at paperpilot.up.railway.app." |
 
 **Hard stop at 1:30.**
 
@@ -90,7 +90,7 @@ NYC Agentic Engineering Hack, 2026-05-23.
 
 ## Talking points to drop if a judge lingers
 
-1. **The meta-flex**: "We ran PaperPilot on PaperPilot. The paper it wrote about itself is in submission/paperpilot.tex on the GitHub repo."
+1. **The meta-flex**: "We ran Merit on Merit. The paper it wrote about itself is in submission/paperpilot.tex on the GitHub repo."
 2. **The cost pill**: "Every component cost is attributable. Gemini ingest, Claude per-section, embeddings, all summed live in the UI."
 3. **The Plugin Pack extractor**: "Click Extract Plugin and the same repo produces a drop-in Claude Code plugin — SKILL.md, slash commands, MCP build prompts, agent specs."
 4. **Honest observability**: "Cost source is tagged `gateway` or `estimated` per call. When the Gateway doesn't propagate usage on streamed responses, we fall back to tiktoken plus a price table. The UI shows `(est.)` so you know which numbers are real."

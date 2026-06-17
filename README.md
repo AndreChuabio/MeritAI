@@ -1,4 +1,4 @@
-# PaperPilot
+# Merit
 
 Three agentic surfaces on one stack: turn your GitHub repo into a research paper, draft your personal-brand outreach for it, and track your O-1 / National Interest Waiver visa progress against the USCIS criteria. Every LLM call traced.
 
@@ -86,7 +86,7 @@ Every LLM call wrapped by `trace.step(...)` → in-process buffer (UI right rail
 
 ## Observability
 
-Every LLM call in PaperPilot is wrapped by `trace.step(...)` in `paperpilot/trace.py`, which records a `.start` and `.end` event into:
+Every LLM call in Merit is wrapped by `trace.step(...)` in `paperpilot/trace.py`, which records a `.start` and `.end` event into:
 
 - An **in-process buffer** keyed by `session_id`, drained by the Streamlit right rail.
 - **ClickHouse** `trace_log` table (best-effort; never fails the user-facing run).
@@ -123,7 +123,7 @@ Set `NIMBLE_API_KEY` to enable; without it the buttons hide, venue ranking falls
 
 ## Authentication
 
-PaperPilot was multi-tenant-hardened post-hackathon. Every Streamlit page is gated by `paperpilot.auth.require_auth()`, which renders a passcode form and blocks the rest of the page render until the user signs in. After a successful sign-in, `st.session_state["user_id"]` and `st.session_state["user_name"]` are populated; the sidebar shows the signed-in user with a sign-out button.
+Merit was multi-tenant-hardened post-hackathon. Every Streamlit page is gated by `paperpilot.auth.require_auth()`, which renders a passcode form and blocks the rest of the page render until the user signs in. After a successful sign-in, `st.session_state["user_id"]` and `st.session_state["user_name"]` are populated; the sidebar shows the signed-in user with a sign-out button.
 
 Configure users via the `PAPERPILOT_USERS_JSON` env var:
 
@@ -213,11 +213,11 @@ Live URL is printed by `railway domain` (or generated automatically). The produc
 
 ### Three pages in the live app
 
-- **Productize** (`Productize.py`). Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, PaperPilot). Ingest -> match -> draft -> export `.tex/.bib`. "Extract plugin" runs the Claude Code plugin extractor on the same bundle. "Load demo cache" replays a precomputed `data/demo_cache.json` with a 6-second synthetic event drip (Wi-Fi-failure insurance). Past-sessions panel and saved artifacts are scoped to the signed-in user.
+- **Productize** (`Productize.py`). Paste a GitHub URL (or click a chip: nanoGPT, transformers, llama.cpp, Merit). Ingest -> match -> draft -> export `.tex/.bib`. "Extract plugin" runs the Claude Code plugin extractor on the same bundle. "Load demo cache" replays a precomputed `data/demo_cache.json` with a 6-second synthetic event drip (Wi-Fi-failure insurance). Past-sessions panel and saved artifacts are scoped to the signed-in user.
 - **Market** (`pages/Market.py`). Personal Brand / Generate Content / Search People / Blast tabs over a Senso brand-kit. Profile load is gated to the signed-in user (closed the resume-leak vector from the hackathon build).
 - **Track** (`pages/Track.py`). Headline "X of 8 O-1A criteria satisfied" with status pills, Evidence Ledger tab for declaring per-criterion items, "Draft narrative" buttons that stream petition-quality paragraphs via the AI Gateway, "Build O-1A dossier (PDF)" two-step download via reportlab, Scholar mock-fallback transparency banner, and the heuristic gauges demoted to "not USCIS-official" on the Dashboard tab.
 
-`make ping` runs a CLI hello-world. `make precompute URL=...` refreshes the demo cache. `make meta` runs PaperPilot on its own repo to regenerate `submission/paperpilot.tex`.
+`make ping` runs a CLI hello-world. `make precompute URL=...` refreshes the demo cache. `make meta` runs Merit on its own repo to regenerate `submission/paperpilot.tex`.
 
 ---
 
@@ -288,7 +288,7 @@ agentichack/
     run_migrations.py             apply every migrations/*.sql against the configured ClickHouse
 
   submission/
-    paperpilot.tex                meta-flex paper draft (PaperPilot on PaperPilot)
+    paperpilot.tex                meta-flex paper draft (Merit on Merit)
     references.bib                BibTeX for paperpilot.tex
     summary.json                  structured ResearchSummary from meta_flex
     demo_script.md                90s / 60s / 30s pitch + Q&A + fallbacks
@@ -314,7 +314,7 @@ Result: zero hallucinated citations make it into the final paper. The visible wa
 
 ## The meta-flex
 
-At 16:25 we run PaperPilot on the PaperPilot repo itself:
+At 16:25 we run Merit on the Merit repo itself:
 
 ```bash
 make meta

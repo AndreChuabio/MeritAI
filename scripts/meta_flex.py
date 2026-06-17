@@ -1,4 +1,4 @@
-"""Meta-flex closing move: run PaperPilot on the PaperPilot repo itself.
+"""Meta-flex closing move: run Merit on the Merit repo itself.
 
 Outputs `submission/paperpilot.tex` and `submission/references.bib` to attach
 to the Devpost submission. Run at ~16:10 once Phase 4 is GO.
@@ -49,7 +49,7 @@ def _default_url() -> str:
 def main() -> None:
     load_dotenv()
     url = sys.argv[1] if len(sys.argv) > 1 else _default_url()
-    print(f"Running PaperPilot on: {url}")
+    print(f"Running Merit on: {url}")
 
     sid = trace.new_session("system")
 

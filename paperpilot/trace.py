@@ -50,7 +50,7 @@ _SESSION_USER: dict[str, str] = {}
 
 
 def new_session(user_id: str) -> str:
-    """Generate a session id used to group an end-to-end PaperPilot run.
+    """Generate a session id used to group an end-to-end Merit run.
 
     The user_id is bound to this session id and used for all subsequent
     log_event / step calls referencing it.

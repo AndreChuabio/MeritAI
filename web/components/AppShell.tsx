@@ -42,7 +42,7 @@ export function AppShell({ children }: AppShellProps) {
           >
             <span className="inline-block h-7 w-7 rounded-xl bg-primary shadow-[0_6px_18px_-6px_rgba(109,74,255,0.6)]" />
             <span>
-              Paper<span className="text-primary">Pilot</span>
+              Me<span className="text-primary">rit</span>
             </span>
           </Link>
 
