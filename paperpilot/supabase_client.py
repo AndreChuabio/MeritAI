@@ -18,22 +18,73 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import datetime
 from typing import Any, Iterable, Sequence
 
 import psycopg
+from psycopg_pool import ConnectionPool
 
 EMBED_DIM = 1536
 
+# A process-wide connection pool. Opening a fresh Postgres connection to the
+# Supabase pooler (TLS + pooler auth) costs ~300-500ms, which dominated every
+# request when callers connected per call. The pool reuses warm connections so
+# requests pay near-zero connect time.
+_pool: ConnectionPool | None = None
+_pool_lock = threading.Lock()
 
-def get_conn() -> psycopg.Connection:
-    """Open a Postgres connection from SUPABASE_DB_URL.
 
-    Caller owns the connection lifecycle. Autocommit is on so single-statement
-    writes land without an explicit transaction; batch writers manage their own.
+def _get_pool() -> ConnectionPool:
+    """Lazily build the shared pool from SUPABASE_DB_URL (thread-safe)."""
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = ConnectionPool(
+                    conninfo=os.environ["SUPABASE_DB_URL"],
+                    min_size=1,
+                    max_size=10,
+                    max_idle=300.0,
+                    kwargs={"autocommit": True},
+                    open=True,
+                )
+    return _pool
+
+
+class _PooledConnection:
+    """Proxy that returns its connection to the pool on close().
+
+    Preserves the existing `conn = get_conn(); try: ...; finally: conn.close()`
+    call pattern -- close() checks the connection back in instead of tearing
+    down the socket. All other attribute access (execute, cursor, ...) is
+    forwarded to the real connection.
     """
-    dsn = os.environ["SUPABASE_DB_URL"]
-    return psycopg.connect(dsn, autocommit=True)
+
+    def __init__(self, pool: ConnectionPool, conn: psycopg.Connection) -> None:
+        self._pool = pool
+        self._conn: psycopg.Connection | None = conn
+
+    def close(self) -> None:
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            self._pool.putconn(conn)
+
+    def __getattr__(self, name: str) -> Any:
+        if self._conn is None:
+            raise RuntimeError("connection already returned to the pool")
+        return getattr(self._conn, name)
+
+
+def get_conn() -> Any:
+    """Check out a pooled Postgres connection.
+
+    Returns a proxy whose close() returns the connection to the pool, so the
+    existing get_conn()/close() call sites keep working but stop paying the
+    per-request connection handshake. Autocommit is on.
+    """
+    pool = _get_pool()
+    return _PooledConnection(pool, pool.getconn())
 
 
 def _vec(embedding: Sequence[float]) -> str:
