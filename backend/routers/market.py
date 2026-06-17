@@ -65,7 +65,7 @@ class DraftCardOut(BaseModel):
 
 
 class OutreachLogRow(BaseModel):
-    """A recorded outreach generation event."""
+    """A recorded outreach event (generated or sent)."""
 
     id: int
     ts: str | None = None
@@ -75,6 +75,41 @@ class OutreachLogRow(BaseModel):
     sample_job_id: str
     draft_id: str
     posted: bool
+    recipient_name: str = ""
+    recipient_contact: str = ""
+
+
+class PersonOut(BaseModel):
+    """A suggested person or organization to reach out to."""
+
+    name: str
+    detail: str = ""
+    url: str = ""
+    email: str = ""
+
+
+class PeopleResponse(BaseModel):
+    """People suggestions plus whether the discovery source is configured."""
+
+    configured: bool
+    people: list[PersonOut]
+
+
+class PeopleRequest(BaseModel):
+    """Request body for people discovery."""
+
+    purpose: str = Field(..., description="VISA, CAREER, NETWORK, BRAND, or SERVICE")
+    context: str = Field("", description="Who/what you are reaching about")
+
+
+class SentRequest(BaseModel):
+    """Request body for recording a draft sent to a recipient."""
+
+    purpose: str
+    channel: str = ""
+    recipient_name: str = ""
+    recipient_contact: str = ""
+    draft_id: str = ""
 
 
 def _profile_out(profile: market_service.Profile) -> ProfileOut:
@@ -131,3 +166,30 @@ def get_outreach_log(
     """Return the caller's recent outreach_log rows, newest first."""
     rows = market_service.list_outreach_log(user.id, limit=limit)
     return [OutreachLogRow(**row) for row in rows]
+
+
+@router.post("/outreach/people", response_model=PeopleResponse)
+def suggest_people(
+    body: PeopleRequest, user: AuthUser = CurrentUser
+) -> PeopleResponse:
+    """Suggest people/orgs to reach for a purpose + context via web search."""
+    result = market_service.suggest_people(
+        user_id=user.id, purpose=body.purpose, context=body.context
+    )
+    return PeopleResponse(
+        configured=result["configured"],
+        people=[PersonOut(**p) for p in result["people"]],
+    )
+
+
+@router.post("/outreach/sent", status_code=status.HTTP_204_NO_CONTENT)
+def record_sent(body: SentRequest, user: AuthUser = CurrentUser) -> None:
+    """Record that the caller sent a draft to a recipient (posted=True)."""
+    market_service.log_sent(
+        user_id=user.id,
+        purpose=body.purpose,
+        channel=body.channel,
+        recipient_name=body.recipient_name,
+        recipient_contact=body.recipient_contact,
+        draft_id=body.draft_id,
+    )

@@ -29,7 +29,20 @@ from paperpilot import trace
 _log = logging.getLogger(__name__)
 
 NIMBLE_BASE_URL = os.environ.get("NIMBLE_BASE_URL", "https://sdk.nimbleway.com")
-NIMBLE_TIMEOUT_S = float(os.environ.get("NIMBLE_TIMEOUT_S", "8.0"))
+
+
+def _timeout() -> float:
+    """Read the request timeout at call time.
+
+    Read lazily (not at import) so a .env loaded after this module is imported
+    still applies. Nimble Search routinely takes ~9s, so the default headroom
+    is generous.
+    """
+    return float(os.environ.get("NIMBLE_TIMEOUT_S", "12.0"))
+
+
+# Back-compat for any caller importing the constant directly.
+NIMBLE_TIMEOUT_S = _timeout()
 
 
 def _api_key() -> str | None:
@@ -69,7 +82,7 @@ def search(query: str, session_id: str, k: int = 5) -> list[SearchHit] | None:
                 f"{NIMBLE_BASE_URL}/v1/search",
                 headers=_headers(),
                 json=payload,
-                timeout=NIMBLE_TIMEOUT_S,
+                timeout=_timeout(),
             )
             r.raise_for_status()
             data = r.json()
@@ -106,7 +119,7 @@ def answers(query: str, session_id: str, depth: str = "lite") -> dict[str, Any] 
                 f"{NIMBLE_BASE_URL}/v1/search",
                 headers=_headers(),
                 json=payload,
-                timeout=NIMBLE_TIMEOUT_S * 2,  # answers do more work; give extra
+                timeout=_timeout() * 2,  # answers do more work; give extra
             )
             r.raise_for_status()
             data = r.json()
@@ -151,7 +164,7 @@ def extract(url: str, session_id: str, parser: dict[str, Any] | None = None) -> 
                 f"{NIMBLE_BASE_URL}/v1/extract",
                 headers=_headers(),
                 json=payload,
-                timeout=NIMBLE_TIMEOUT_S * 2,
+                timeout=_timeout() * 2,
             )
             r.raise_for_status()
             data = r.json()
