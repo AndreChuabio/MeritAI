@@ -565,13 +565,21 @@ with left:
                 use_container_width=True,
             )
             if extract_clicked:
+                from paperpilot.github_ingest import render_bundle
                 from paperpilot.skill_extract import extract_plugin
 
                 with st.status(
                     "Analyzing repo for plugin opportunities...", expanded=True
                 ) as status:
                     try:
-                        pack = extract_plugin(st.session_state.bundle, session_id)
+                        bundle = st.session_state.bundle
+                        pack = extract_plugin(
+                            render_bundle(bundle),
+                            session_id,
+                            repo_label=f"{bundle.owner}/{bundle.name}",
+                            file_count=bundle.file_count,
+                            total_tokens=bundle.total_tokens,
+                        )
                         st.session_state.skill_pack = pack
                         if pack.total_artifacts == 0:
                             status.update(

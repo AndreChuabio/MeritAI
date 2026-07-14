@@ -247,22 +247,23 @@ def fetch_artifacts(
 def fetch_artifact_content(
     session_id: str,
     artifact_name: str,
-    user_id: str | None = None,
+    user_id: str,
     conn: psycopg.Connection | None = None,
 ) -> str | None:
     """Pull the raw content blob for one specific artifact (newest match).
 
-    user_id is optional and, when given, scopes the lookup to that caller so
-    one tenant cannot read another tenant's cached artifact by guessing or
-    replaying a session id.
+    user_id is required and always scopes the lookup to that caller. The
+    backend connects as the service role and bypasses RLS, so this filter is
+    the only guard against one tenant reading another tenant's cached
+    artifact by guessing or replaying a session id -- it used to be an
+    optional parameter that, when omitted, silently dropped the filter
+    entirely. Making it required means a caller who forgets it gets a
+    TypeError at call time instead of a cross-tenant read at runtime.
     """
     owns = conn is None
     conn = conn or get_conn()
-    where = ["session_id = %s", "artifact_name = %s"]
-    params: list[Any] = [session_id, artifact_name]
-    if user_id is not None:
-        where.append("user_id = %s")
-        params.append(user_id)
+    where = ["session_id = %s", "artifact_name = %s", "user_id = %s"]
+    params: list[Any] = [session_id, artifact_name, user_id]
     sql = (
         "SELECT content FROM session_artifacts "
         "WHERE " + " AND ".join(where) + " ORDER BY ts DESC LIMIT 1"
@@ -273,6 +274,41 @@ def fetch_artifact_content(
         if owns:
             conn.close()
     return row[0] if row else None
+
+
+def session_owner(
+    session_id: str, conn: psycopg.Connection | None = None
+) -> str | None:
+    """Return the user_id already associated with a session, or None.
+
+    Checks session_artifacts, then trace_log, for the first row recording a
+    non-null user_id under this session_id. Used to guard against a
+    caller-supplied session_id (e.g. POST /extract-plugin's optional
+    session_id, meant to reuse a prior /ingest bundle) being reused to write
+    rows into another tenant's session namespace. An unknown session_id
+    returns None -- a fresh session, not a violation.
+    """
+    owns = conn is None
+    conn = conn or get_conn()
+    try:
+        row = conn.execute(
+            "SELECT user_id FROM session_artifacts "
+            "WHERE session_id = %s AND user_id IS NOT NULL LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row and row[0]:
+            return row[0]
+        row = conn.execute(
+            "SELECT user_id FROM trace_log "
+            "WHERE session_id = %s AND user_id IS NOT NULL LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row and row[0]:
+            return row[0]
+        return None
+    finally:
+        if owns:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------

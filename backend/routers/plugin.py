@@ -62,6 +62,11 @@ def extract_plugin_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
+    except HTTPException:
+        # Raised deliberately by extract_plugin_from_repo (e.g. the 403 from
+        # _check_session_ownership) -- let it through as-is instead of
+        # masking it as a generic 502 below.
+        raise
     except Exception as exc:  # noqa: BLE001 -- surface pipeline errors as 502
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

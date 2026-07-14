@@ -23,6 +23,8 @@ import json
 import uuid
 from dataclasses import dataclass
 
+from fastapi import HTTPException, status
+
 from paperpilot import supabase_client
 from paperpilot.github_ingest import _parse_repo_url, fetch_repo, render_bundle
 from paperpilot.skill_extract import PluginPack, extract_plugin
@@ -54,6 +56,25 @@ def _load_bundle(session_id: str, user_id: str, repo_url: str) -> str:
     if cached:
         return cached
     return fetch_repo_bundle(repo_url)
+
+
+def _check_session_ownership(session_id: str, user_id: str) -> None:
+    """Reject a caller-supplied session_id that already belongs to another user.
+
+    Reads are naturally safe: fetch_artifact_content filters by user_id, so
+    a caller who passes another user's session_id just gets no cached
+    bundle and falls back to fetching fresh (see _load_bundle). Writes are
+    not -- trace.step (inside extract_plugin) and insert_artifact below
+    would happily write rows keyed to that other user's session_id
+    namespace. An unknown session_id (no existing owner) is a fresh session
+    and is allowed through.
+    """
+    owner_id = supabase_client.session_owner(session_id)
+    if owner_id is not None and owner_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="session_id belongs to a different user",
+        )
 
 
 @dataclass(frozen=True)
@@ -90,7 +111,13 @@ def extract_plugin_from_repo(
     Returns:
         A PluginResult with the kebab-case plugin name, the parsed manifest,
         and the raw zip bytes for the caller to base64-encode for the response.
+
+    Raises:
+        HTTPException(403): session_id was supplied and already belongs to
+            a different user_id.
     """
+    if session_id is not None:
+        _check_session_ownership(session_id, user_id)
     session_id = session_id or str(uuid.uuid4())
     source_repo = repo_url.strip()
     owner, name = _parse_repo_url(source_repo)
