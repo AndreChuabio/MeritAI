@@ -90,10 +90,15 @@ class PersonOut(BaseModel):
 
 
 class PeopleResponse(BaseModel):
-    """People suggestions plus whether the discovery source is configured."""
+    """People suggestions plus whether the discovery source is configured.
+
+    reason is populated when configured is False, explaining that contact
+    discovery is an optional integration rather than a broken feature.
+    """
 
     configured: bool
     people: list[PersonOut]
+    reason: str = ""
 
 
 class PeopleRequest(BaseModel):
@@ -182,6 +187,7 @@ def suggest_people(
     return PeopleResponse(
         configured=result["configured"],
         people=[PersonOut(**p) for p in result["people"]],
+        reason=result.get("reason", ""),
     )
 
 

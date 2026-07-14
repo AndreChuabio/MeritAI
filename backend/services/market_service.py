@@ -201,13 +201,23 @@ def suggest_people(
 ) -> dict[str, Any]:
     """Suggest people/orgs to reach via Nimble web search.
 
-    Returns {"configured": bool, "people": [{name, detail, url, email}]}. When
-    Nimble is unconfigured, returns configured=False with an empty list so the
-    UI can explain why instead of erroring. Emails are best-effort extracted
-    from result snippets; many results will have none.
+    Returns {"configured": bool, "people": [...], "reason": str}. Nimble is an
+    optional accelerant, not a precondition: when it is unconfigured this
+    returns configured=False with an empty list and a "reason" explaining
+    that contact discovery is optional so the UI can present it as such
+    rather than as a broken feature. Emails are best-effort extracted from
+    result snippets; many results will have none.
     """
     if not nimble_client.is_configured():
-        return {"configured": False, "people": []}
+        return {
+            "configured": False,
+            "people": [],
+            "reason": (
+                "Contact discovery is an optional integration and is not "
+                "configured. Enter the recipient's name and contact yourself "
+                "to continue -- drafting works without it."
+            ),
+        }
     qualifier = _PEOPLE_QUERY.get(
         purpose.upper(), "people and organizations working on"
     )
@@ -225,7 +235,7 @@ def suggest_people(
                 "email": emails[0] if emails else "",
             }
         )
-    return {"configured": True, "people": people}
+    return {"configured": True, "people": people, "reason": ""}
 
 
 def list_outreach_log(

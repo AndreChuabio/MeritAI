@@ -162,6 +162,8 @@ export interface PersonLead {
 export interface PeopleResponse {
   configured: boolean;
   people: PersonLead[];
+  /** Set when configured is false: explains contact discovery is optional. */
+  reason?: string;
 }
 
 /** Body for recording a draft sent to a recipient. */

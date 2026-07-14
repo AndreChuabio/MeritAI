@@ -148,6 +148,7 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [peopleConfigured, setPeopleConfigured] = useState(true);
+  const [peopleReason, setPeopleReason] = useState("");
   const [searchedPeople, setSearchedPeople] = useState(false);
 
   const [log, setLog] = useState<OutreachLogView[]>([]);
@@ -202,6 +203,7 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
     try {
       const res = await api.market.suggestPeople(purpose, context);
       setPeopleConfigured(res.configured);
+      setPeopleReason(res.reason ?? "");
       setPeople(res.people ?? []);
     } catch (err: unknown) {
       setPeopleError(
@@ -424,9 +426,11 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
             {peopleError ? (
               <p className="text-sm text-danger">{peopleError}</p>
             ) : !peopleConfigured ? (
-              <p className="text-sm text-muted">
-                People search is not set up. Enter a recipient manually above.
-              </p>
+              <div className="rounded-2xl bg-primary-50 px-4 py-3 text-sm text-ink">
+                <span className="font-medium">Contact discovery is optional.</span>{" "}
+                {peopleReason ||
+                  "Enter the recipient's name and contact yourself above -- drafting works without it."}
+              </div>
             ) : peopleLoading ? null : people.length === 0 ? (
               <p className="text-sm text-muted">
                 No leads found. Try broader context, or enter a recipient
