@@ -41,23 +41,61 @@ forward. No billing code is in scope.
 
 ## Product shape
 
-**Merit OSS** is a public repository under MIT. It contains the CFP corpus
-schema and a seed corpus, the repo-to-venue matcher, and the drafting pipeline.
-Self-hosters configure their own provider keys via `.env`, so this deployment
-mode involves no key custody by Merit.
+Merit is one open-source project, MIT licensed, built on a single primitive.
 
-**Merit Hosted** is the existing Vercel + Railway + Supabase deployment.
-Productize runs on the user's key (BYOK). Track runs on Merit's keys, free, and
-quota-capped.
+**The evidence ledger is the primitive.** `o1_evidence` is a structured,
+timestamped, URL-backed record of what a person has actually done. Everything
+else in Merit either writes to that ledger or renders it.
 
-The funnel connecting them is mechanical, not aspirational: a user who drafts a
-paper with Merit and lands it at a venue has produced evidence for the
-"scholarly articles" and "original contribution" criteria of an O-1A petition.
-The open tool helps build the record; the hosted tool helps assemble the case.
+**One generator.** Productize turns a GitHub repo into a paper draft and matches
+it to a venue. A paper landed at a venue is a new row in the ledger. This is the
+surface that manufactures evidence.
+
+**Two renderers over the same rows.**
+
+- *Living resume*: the ledger rendered for humans. Evidence-backed proof of work
+  — repos, papers, hackathon builds — as an alternative to a credential-based
+  CV. This is the general case.
+- *O-1A view*: the same ledger rendered against the eight USCIS criteria, with
+  drafted narratives and a reportlab PDF dossier. This is a specific export
+  format, not a separate product.
+
+The two renderers are views, not applications. Adding the living resume does not
+duplicate the O-1A work; it reuses it.
+
+**Deployment modes.** Self-hosters run the whole thing with their own provider
+keys in `.env`, so Merit takes no key custody. Merit Hosted (Vercel + Railway +
+Supabase) runs Productize on the user's key (BYOK) and the ledger surfaces on
+Merit's keys, free and quota-capped, because ledger operations cost cents and
+the audience for them is frequently non-technical.
 
 MIT rather than a copyleft license: the moat argument for AGPL only holds if
 there is revenue to protect, and there is none. MIT maximizes adoption, which is
 the actual goal of open-sourcing.
+
+## Scope of this spec
+
+This spec covers **readiness**: what must be true before Merit can be public and
+run on other people's keys. It does not cover building the living-resume
+renderer.
+
+That split is deliberate. Readiness is well-understood, small, and unblocks the
+open-source release that is the immediate goal. The living resume is a net-new
+product surface — the ledger exists, but nothing renders it publicly — and it
+deserves its own design pass rather than being smuggled into an infrastructure
+plan. Bundling them would trap the fast work behind the slow work.
+
+In scope here:
+
+- Open-source blockers (dev-auth fallback, collaborator name in seed data)
+- BYOK with no server-side key custody, and the log-scrubbing that requires
+- The usage ledger fix, and the quotas that depend on it
+- Cost-tail controls on repo ingest
+- Data protection: export, deletion, RLS audit, disclaimers
+
+Deferred to a follow-up spec:
+
+- The living-resume renderer (public profile, evidence presentation, sharing)
 
 ## Decisions
 
