@@ -178,16 +178,21 @@ holds, including on the service-role backend path where RLS is bypassed and
 app-level scoping is the only control.
 
 **Unauthorized practice of law.** Merit drafts petition narratives against the
-eight USCIS O-1A criteria. Being free lowers the stakes of a UPL claim; it does
-not immunize against one, and immigration is an area where non-attorney
-assistance is actively policed. Required in-product: content is
-AI-generated; Merit is a document-preparation tool and not legal advice; no
-outcome is guaranteed; consult a licensed immigration attorney. Positioning must
-avoid any implication that Merit performs a lawyer's function.
+eight USCIS O-1A criteria. Required in-product wherever that content is
+produced: it is AI-generated; Merit is a document-preparation tool and not legal
+advice; no outcome is guaranteed; consult a licensed immigration attorney.
+Positioning must avoid any implication that Merit performs a lawyer's function.
 
-**Counsel review gates launch.** A licensed immigration attorney reviews the
-product positioning and the terms of service before Track is publicly available.
-This is a blocking dependency, not a follow-up.
+**Counsel review: deferred, with an explicit trigger.** No attorney review is
+required for this scope. The open-source release carries no UPL exposure — a
+self-hosted tool a user runs on their own key is not Merit practicing law — and
+hosted Track is currently used only by its author and two known users.
+
+That changes the moment hosted Track is opened to the general public, free or
+paid. Being free does not immunize against a UPL claim, and immigration is among
+the most actively policed areas for non-attorney assistance. Opening hosted
+Track to the public is the trigger to obtain counsel review of positioning and
+terms; it is recorded here so the decision is deliberate rather than forgotten.
 
 ## Success criteria
 
