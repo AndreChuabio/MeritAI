@@ -131,7 +131,7 @@ Configure users via the `PAPERPILOT_USERS_JSON` env var:
 PAPERPILOT_USERS_JSON='[{"user_id":"andre","name":"Andre","passcode":"..."},{"user_id":"nikki","name":"Nikki","passcode":"..."}]'
 ```
 
-If the env var is unset, empty, or invalid JSON, the module falls back to a single dev user (`dev` / `dev`) and surfaces an `st.warning` so the degradation is obvious in production.
+If the env var is unset, empty, or invalid JSON, the module fails closed and grants access to nobody, surfacing an `st.error` on the login screen. Set `ALLOW_DEV_AUTH=1` to opt back into a single built-in dev user (`dev` / `dev`) for local development; an `st.warning` marks the degraded state.
 
 `user_id` threads through every write: `trace.new_session(user_id)`, `pipeline.save_artifact(user_id, ...)`, `clickhouse_client.fetch_artifacts(user_id, ...)`, `outreach.orchestrator.generate_drafts(..., user_id=...)`, and the O-1A evidence ledger. The past-sessions panel on Productize, the outreach drafts on Market, and the evidence ledger on Track are all scoped to the signed-in user.
 

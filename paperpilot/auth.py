@@ -15,9 +15,10 @@ Configuration:
         [{"user_id": "andre", "name": "Andre", "passcode": "..."},
          {"user_id": "nikki", "name": "Nikki", "passcode": "..."}]
 
-If the env var is unset, empty, or invalid JSON, the module falls back to a
-single dev user (user_id="dev", passcode="dev") and surfaces a Streamlit
-warning so the degradation is visible in production.
+If the env var is unset, empty, or invalid JSON, the module fails closed and
+grants access to nobody. Set ALLOW_DEV_AUTH=1 to opt back into a single
+built-in dev user (user_id="dev", passcode="dev") for local development; a
+Streamlit warning surfaces the degraded state either way.
 """
 
 from __future__ import annotations
@@ -43,6 +44,25 @@ class _UserRecord(TypedDict):
 
 _DEV_USER: _UserRecord = {"user_id": "dev", "name": "Dev", "passcode": "dev"}
 _USERS_ENV_VAR = "PAPERPILOT_USERS_JSON"
+_DEV_AUTH_ENV_VAR = "ALLOW_DEV_AUTH"
+
+
+def _dev_fallback() -> tuple[List[_UserRecord], bool]:
+    """Return the fallback user set.
+
+    Fails closed by default: an unconfigured instance grants access to nobody.
+    The built-in dev account is available only when ALLOW_DEV_AUTH=1 is set
+    explicitly, so a public deployment that loses PAPERPILOT_USERS_JSON does not
+    silently become accessible with a passcode that anyone can read in the repo.
+    """
+    if os.environ.get(_DEV_AUTH_ENV_VAR) == "1":
+        return [dict(_DEV_USER)], True  # type: ignore[list-item]
+    logger.warning(
+        "%s is unset and %s is not 1: refusing all logins.",
+        _USERS_ENV_VAR,
+        _DEV_AUTH_ENV_VAR,
+    )
+    return [], True
 
 
 def _load_users() -> tuple[List[_UserRecord], bool]:
@@ -50,24 +70,26 @@ def _load_users() -> tuple[List[_UserRecord], bool]:
 
     Returns a tuple of (users, is_dev_fallback). ``is_dev_fallback`` is True
     when the env var is unset, empty, malformed, or contains no valid records.
-    A dev fallback always yields exactly one user (the built-in dev account).
+    In that case, access is refused by default (no users returned) unless
+    ALLOW_DEV_AUTH=1 is set, in which case a single built-in dev account is
+    returned.
     """
     raw = os.environ.get(_USERS_ENV_VAR, "").strip()
     if not raw:
-        return [dict(_DEV_USER)], True  # type: ignore[list-item]
+        return _dev_fallback()
 
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
         logger.warning("PAPERPILOT_USERS_JSON is not valid JSON: %s", exc)
-        return [dict(_DEV_USER)], True  # type: ignore[list-item]
+        return _dev_fallback()
 
     if not isinstance(parsed, list) or not parsed:
         logger.warning(
             "PAPERPILOT_USERS_JSON must be a non-empty JSON list; got %s",
             type(parsed).__name__,
         )
-        return [dict(_DEV_USER)], True  # type: ignore[list-item]
+        return _dev_fallback()
 
     users: List[_UserRecord] = []
     for idx, entry in enumerate(parsed):
@@ -93,7 +115,7 @@ def _load_users() -> tuple[List[_UserRecord], bool]:
 
     if not users:
         logger.warning("PAPERPILOT_USERS_JSON contained no valid user records")
-        return [dict(_DEV_USER)], True  # type: ignore[list-item]
+        return _dev_fallback()
 
     return users, False
 
@@ -113,7 +135,7 @@ def _render_login_form(users: List[_UserRecord], is_dev_fallback: bool) -> None:
     calls ``st.rerun()``. On failure it calls ``st.error`` and returns so
     the caller can ``st.stop()`` the page render.
     """
-    if is_dev_fallback:
+    if is_dev_fallback and users:
         st.warning(
             "Running in dev auth mode -- no PAPERPILOT_USERS_JSON configured"
         )
@@ -123,6 +145,14 @@ def _render_login_form(users: List[_UserRecord], is_dev_fallback: bool) -> None:
     with middle:
         st.markdown("## Merit")
         st.caption("Sign in to continue.")
+
+        if not users:
+            st.error(
+                "No users are configured for this deployment. Set "
+                "PAPERPILOT_USERS_JSON (or ALLOW_DEV_AUTH=1 for local "
+                "development) to enable sign-in."
+            )
+            return
 
         names = [user["name"] for user in users]
         with st.form("paperpilot_auth_form", clear_on_submit=False):
