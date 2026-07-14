@@ -19,12 +19,31 @@ from dataclasses import dataclass
 from time import time
 from typing import Any, Iterator
 
+from paperpilot.redaction import REDACTED, SENSITIVE_KEYS, redact_text
 from paperpilot.supabase_client import insert_trace
 
 
 def _ledger_configured() -> bool:
     """True when a Supabase connection string is available to write traces to."""
     return bool(os.environ.get("SUPABASE_DB_URL"))
+
+
+def _scrub(value: Any) -> Any:
+    """Recursively redact credentials from a trace payload before it is stored.
+
+    trace_log.payload is free-form jsonb; without this, a key passed into any
+    step(...) kwarg would be persisted forever.
+    """
+    if isinstance(value, dict):
+        return {
+            k: (REDACTED if str(k).lower() in SENSITIVE_KEYS else _scrub(v))
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_scrub(v) for v in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
 
 
 @dataclass
@@ -79,7 +98,7 @@ def log_event(session_id: str, kind: str, payload: dict[str, Any]) -> None:
     # not the empty string, or the insert fails on the cast.
     user_id = _SESSION_USER.get(session_id) or None
     try:
-        insert_trace(session_id, user_id, kind, payload)
+        insert_trace(session_id, user_id, kind, _scrub(payload))
     except Exception as exc:  # noqa: BLE001 -- best-effort; never fail the run
         # Surface but don't crash. The buffer still has the event.
         evt.payload.setdefault("_warn", []).append(f"trace_insert_failed: {exc!s}")

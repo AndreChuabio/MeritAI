@@ -17,12 +17,14 @@ from backend.auth import AuthUser, CurrentUser
 from backend.byok import RequireLLMKey
 from backend.routers import assist, draft, evidence, export, ingest, market, plugin
 from backend.venues import rank_venues
-from paperpilot import supabase_client
+from paperpilot import redaction, supabase_client
 from paperpilot.llm_ingest import ResearchSummary
 
 load_dotenv()
 
 app = FastAPI(title="Merit API", version="0.1.0")
+
+redaction.install()
 
 # CORS for the Next.js frontend. Explicit origins (localhost + the production
 # domain) come from FRONTEND_ORIGINS; the regex additionally allows every

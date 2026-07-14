@@ -3,7 +3,7 @@
 Merit never stores a user's API key. The browser holds it, sends it on each
 request in the X-LLM-Key header, and this dependency binds it to the request
 context for the duration of the call. Nothing writes it to a table, a log, or a
-response body. See backend/logging_filters.py for the scrubbing that enforces
+response body. See paperpilot/redaction.py for the scrubbing that enforces
 the log half of that promise.
 
 The key is a Vercel AI Gateway key, not a provider key: Merit calls Google for
