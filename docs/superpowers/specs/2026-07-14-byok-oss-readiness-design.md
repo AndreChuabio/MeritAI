@@ -25,8 +25,10 @@ forward. No billing code is in scope.
 
 - Open-source the Productize surface without leaking credentials or misusing a
   collaborator's identity.
-- Let hosted users run Productize on their own API keys, without Merit ever
-  taking custody of those keys.
+- Let hosted users run the LLM-heavy surfaces on their own API keys, without
+  Merit ever taking custody of those keys.
+- Ensure every surface works for someone who clones the repo with an LLM key and
+  nothing else — no proprietary vendor account required to get a result.
 - Keep Track free, hosted, and frictionless, at a cost per user measured in
   cents, with server-side quotas that make abuse bounded rather than unbounded.
 - Meet the data-protection and disclosure obligations that apply to a free
@@ -37,7 +39,6 @@ forward. No billing code is in scope.
 - Payments, subscriptions, plans, entitlements. Explicitly out of scope.
 - Organizations, teams, or multi-client tenancy. A user remains exactly one
   `auth.users` row.
-- Market. Cut from this scope entirely (see Decisions).
 
 ## Product shape
 
@@ -51,7 +52,7 @@ else in Merit either writes to that ledger or renders it.
 it to a venue. A paper landed at a venue is a new row in the ledger. This is the
 surface that manufactures evidence.
 
-**Two renderers over the same rows.**
+**Three renderers over the same rows.**
 
 - *Living resume*: the ledger rendered for humans. Evidence-backed proof of work
   — repos, papers, hackathon builds — as an alternative to a credential-based
@@ -59,9 +60,11 @@ surface that manufactures evidence.
 - *O-1A view*: the same ledger rendered against the eight USCIS criteria, with
   drafted narratives and a reportlab PDF dossier. This is a specific export
   format, not a separate product.
+- *Outreach (Market)*: the ledger and profile rendered as a purpose-driven
+  message to a specific person — visa, speaking, collaboration, network.
 
-The two renderers are views, not applications. Adding the living resume does not
-duplicate the O-1A work; it reuses it.
+The renderers are views, not applications. Each reuses the ledger rather than
+duplicating it.
 
 **Deployment modes.** Self-hosters run the whole thing with their own provider
 keys in `.env`, so Merit takes no key custody. Merit Hosted (Vercel + Railway +
@@ -89,6 +92,7 @@ In scope here:
 
 - Open-source blockers (dev-auth fallback, collaborator name in seed data)
 - BYOK with no server-side key custody, and the log-scrubbing that requires
+- Un-vendoring Market so it works without a Senso or Nimble account
 - The usage ledger fix, and the quotas that depend on it
 - Cost-tail controls on repo ingest
 - Data protection: export, deletion, RLS audit, disclaimers
@@ -164,17 +168,37 @@ once in `/ingest` and again in `/extract-plugin`
 The bundle must be reused between the two calls rather than re-sent, and the
 user must see the bundle size and confirm before a large ingest proceeds.
 
-### Market is cut
+### Market stays, and is un-vendored
 
-`generate_outreach` makes no LLM call of its own; it delegates entirely to Senso
-(`paperpilot/outreach/orchestrator.py:86-91`), returning an error card when
-unkeyed (`backend/services/market_service.py:283-294`). The people-finder
-delegates entirely to Nimble (`market_service.py:209-227`). "Send" opens the
-user's mail client; Merit sends nothing. Its vendor COGS is not measurable from
-the code.
+Market is the third renderer over the ledger and it ships. But it cannot ship in
+its current form, because it does not work for anyone who is not us.
 
-Market is removed from the v1 story. It is not deleted from the codebase, but it
-is not open-sourced, not promoted, and not maintained in this scope.
+`generate_outreach` makes no LLM call of its own; it delegates the entire
+generation to Senso (`paperpilot/outreach/orchestrator.py:86-91`) and returns an
+error card when no `SENSO_API_KEY` is set
+(`backend/services/market_service.py:283-294`). The people-finder delegates
+entirely to Nimble (`market_service.py:209-227`) and reports `configured: false`
+when unset. Senso and Nimble are niche vendors; substantially none of the
+open-source audience holds accounts with either. Publishing this as-is means
+publishing a surface that is broken on first run for nearly everyone who clones
+it.
+
+The fix is to remove the hard vendor dependency, not to remove the feature:
+
+- **Generation moves to a direct LLM call** on the user's BYOK key — the same
+  key already used by Productize. Outreach drafting is text generation
+  conditioned on a voice, a purpose, and the user's evidence; it does not need a
+  content-platform vendor. Senso remains supported as an optional enhancement
+  when a key is present.
+- **People-search degrades gracefully.** Without a Nimble key the user supplies
+  the recipient themselves, which is the common case regardless. Nimble becomes
+  an optional accelerant, not a precondition.
+- **Sending is unchanged and honest.** Merit composes; the user's own mail client
+  sends. Merit does not send mail on anyone's behalf and does not claim to.
+
+The result is a surface that works out of the box with nothing but an LLM key,
+and that gets better if you happen to have the vendor accounts. It also removes
+the last place where Merit's cost is not measurable from its own code.
 
 ## Pre-open-source blockers
 
@@ -238,9 +262,12 @@ terms; it is recorded here so the decision is deliberate rather than forgotten.
 - A hosted user completes a Productize run on their own key, and that key appears
   in no log, trace, or database row — demonstrated by a passing test, not by
   inspection.
+- Someone who clones the repo with only an LLM key configured — no Senso account,
+  no Nimble account — can generate an outreach draft. No surface returns an error
+  card for a missing vendor key.
 - A Track user exceeding a quota is refused by the backend, not by the UI.
 - Per-user `cost_usd` is queryable from Supabase.
 - A user can export their data and delete their account, and deletion is
   observed to remove every row keyed to them.
 - Disclaimers are present at each point where AI-generated petition content is
-  produced, and counsel has signed off on positioning and terms.
+  produced.
