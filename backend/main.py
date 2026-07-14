@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from backend.auth import AuthUser, CurrentUser
 from backend.byok import RequireLLMKey
-from backend.routers import assist, draft, evidence, export, ingest, market, plugin
+from backend.routers import account, assist, draft, evidence, export, ingest, market, plugin
 from backend.venues import rank_venues
 from paperpilot import redaction, supabase_client
 from paperpilot.llm_ingest import ResearchSummary
@@ -55,6 +55,7 @@ app.include_router(plugin.router)
 app.include_router(evidence.router)
 app.include_router(market.router)
 app.include_router(assist.router)
+app.include_router(account.router)
 
 
 class HealthResponse(BaseModel):
