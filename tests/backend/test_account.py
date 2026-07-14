@@ -18,6 +18,12 @@ def test_export_requires_auth():
     assert resp.status_code == 401
 
 
+def test_delete_requires_auth():
+    with TestClient(app) as client:
+        resp = client.delete("/account")
+    assert resp.status_code == 401
+
+
 def test_export_returns_every_table_keyed_to_the_user(monkeypatch):
     from backend.routers import account
 
