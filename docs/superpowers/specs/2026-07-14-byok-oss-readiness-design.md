@@ -160,13 +160,27 @@ lands first.
 
 ### Cost tail controls
 
-Even on a user's key, waste is a defect. Today the repo bundle is capped at 600K
-tokens (`paperpilot/github_ingest.py:26,29,188`) and is sent to Gemini twice:
-once in `/ingest` and again in `/extract-plugin`
-(`paperpilot/skill_extract.py:205`). Nothing caps the number of runs.
+Even on a user's key, waste is a defect. The repo bundle is capped at 600K tokens
+(`paperpilot/github_ingest.py:26,29,188`) and nothing caps the number of runs.
 
-The bundle must be reused between the two calls rather than re-sent, and the
-user must see the bundle size and confirm before a large ingest proceeds.
+The bundle must be fetched once and reused between `/ingest` and
+`/extract-plugin` rather than fetched twice, and the user must see the bundle
+size and confirm before a large ingest proceeds.
+
+**A correction, recorded deliberately.** An earlier draft of this spec claimed
+the bundle was "sent to Gemini twice" and that reusing it would halve the cost of
+a Productize run. That was wrong, and the error survived into the implementation
+plan. The bundle is *fetched* twice, but the two Gemini calls carry *different
+prompts* — `/ingest` summarizes the repo, `/extract-plugin` extracts skills from
+it — and both legitimately need the full source. Reusing the bundle removes the
+duplicate GitHub fetch and the duplicate render pass: network and CPU, not
+tokens. Token spend is unchanged.
+
+Halving the token spend would require merging the two into a single call
+returning a combined structured response. That is a genuine redesign — it couples
+two independent surfaces and changes the ingest streaming UX — and it is
+deliberately out of scope. The size cap plus explicit confirmation is what bounds
+the cost, and the cost falls on the user's own key.
 
 ### Market stays, and is un-vendored
 

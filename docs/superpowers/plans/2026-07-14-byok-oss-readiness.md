@@ -1301,9 +1301,9 @@ error."
 
 ---
 
-### Task 9: Stop sending the repo bundle to Gemini twice
+### Task 9: Stop fetching the repo bundle twice, and cap it
 
-`/ingest` fetches the repo bundle (capped at 600K tokens by `paperpilot/github_ingest.py:26,29,188`) and sends it to Gemini. `/extract-plugin` then re-fetches and re-sends the same bundle (`paperpilot/skill_extract.py:198-205`). That doubles the cost of a Productize run. Even on the user's key, waste is a defect.
+`/ingest` fetches the repo bundle (capped at 600K tokens by `paperpilot/github_ingest.py:26,29,188`) and sends it to Gemini with a summarize prompt. `/extract-plugin` then re-fetches the same bundle and sends it with a different extract prompt. Reusing the bundle removes the duplicate GitHub fetch and render pass -- network and CPU. It does NOT halve token spend: the two Gemini calls carry different prompts and both legitimately need the full source. Merging them into one call is a redesign and is deliberately out of scope. Even on the user's key, waste is a defect, and nothing currently caps run size.
 
 **Files:**
 - Modify: `backend/services/ingest_service.py` (persist the bundle)
@@ -1398,7 +1398,7 @@ def _load_bundle(session_id: str, user_id: str, repo_url: str) -> str:
     """Return the repo bundle for this session, fetching only if not already stored.
 
     /ingest already fetched and paid for this bundle. Re-fetching and re-sending
-    it doubles the cost of a Productize run for no benefit.
+    re-fetching and re-rendering it costs a second GitHub round-trip for no benefit.
     """
     cached = supabase_client.fetch_artifact_content(
         session_id, "repo_bundle", user_id=user_id
@@ -1503,9 +1503,10 @@ Expected: 5 passed; full suite green.
 git add backend/services/ingest_service.py backend/services/plugin_service.py backend/routers/ingest.py web/app/\(app\)/productize/page.tsx tests/backend/test_bundle_reuse.py
 git commit -m "Reuse the repo bundle between ingest and plugin extraction, and cap it
 
-The same bundle -- up to 600K tokens -- was fetched and sent to Gemini twice per
-Productize run. Store it once on ingest and read it back. Above a threshold, tell
-the caller what they are about to spend on their own key and make them confirm."
+The same bundle -- up to 600K tokens -- was fetched twice per Productize run.
+Store it once on ingest and read it back. Above a threshold, tell the caller what
+they are about to spend on their own key and make them confirm. Note this does
+not reduce token spend: the two Gemini calls carry different prompts."
 ```
 
 ---
