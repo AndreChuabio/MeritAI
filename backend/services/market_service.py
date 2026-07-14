@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from paperpilot import nimble_client, supabase_client, trace
-from paperpilot.outreach.orchestrator import DraftCard, generate_drafts
+from paperpilot.outreach.orchestrator import generate_drafts
 from paperpilot.outreach.purpose import Purpose
 from paperpilot.outreach.senso import Senso
 
@@ -271,29 +271,19 @@ def generate_outreach(
 
     Reuses paperpilot.outreach.orchestrator.generate_drafts for all LLM and
     Senso work; this layer only supplies a Supabase-backed logger and opens a
-    session. Senso may be unconfigured: if SENSO_API_KEY is missing we return
-    one error card per nothing-generated rather than raising, so the UI can
-    surface a clear message.
+    session. Senso is optional: when configured it is used for its brand-kit
+    tone retrieval, otherwise drafting runs on a direct LLM call.
     """
     try:
         purpose_enum = Purpose(purpose)
     except ValueError as exc:
         raise ValueError(f"Unknown purpose: {purpose!r}") from exc
 
-    if not os.environ.get("SENSO_API_KEY"):
-        return [
-            asdict(
-                DraftCard(
-                    channel="",
-                    content_type_id="",
-                    sample_job_id="",
-                    markdown="",
-                    error="Senso is not configured (SENSO_API_KEY missing).",
-                )
-            )
-        ]
+    # Senso is an optional enhancement, not a precondition. Without a key we
+    # draft with a direct LLM call on the caller's own key, which is the path
+    # every self-hosted user takes.
+    senso = Senso.from_env() if os.environ.get("SENSO_API_KEY") else None
 
-    senso = Senso.from_env()
     session_id = trace.new_session(user_id)
     conn = supabase_client.get_conn()
     try:

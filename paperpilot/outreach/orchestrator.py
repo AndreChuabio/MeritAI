@@ -1,6 +1,6 @@
-"""Outreach orchestrator: purpose -> Senso draft cards.
+"""Outreach orchestrator: purpose -> draft cards.
 
-Wraps every Senso call in `paperpilot.trace.step` so the existing Lapdog
+Wraps every generation call in `paperpilot.trace.step` so the existing Lapdog
 pipeline captures each step into Datadog. Errors on one channel do not
 cancel the others — the failing card carries an `error` string for the UI.
 """
@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from paperpilot import trace
+from paperpilot.outreach import llm_draft
 from paperpilot.outreach.content_types import CONTENT_TYPE_CONFIGS
 from paperpilot.outreach.purpose import Purpose, channels_for
 from paperpilot.outreach.senso import Senso
@@ -54,7 +55,7 @@ def _build_context(purpose: Purpose, user_context: str) -> str:
 
 
 def generate_drafts(
-    senso: Senso,
+    senso: Senso | None,
     purpose: Purpose | str,
     context: str,
     session_id: str,
@@ -63,10 +64,14 @@ def generate_drafts(
 ) -> list[DraftCard]:
     """Generate one draft card per channel mapped to `purpose`.
 
-    `user_id` is the authed caller; required so outreach_log rows are
-    scoped to the right user. `logger` is an `outreach.log` module
-    reference or any object exposing `log_generate(...)`. Passing it
-    explicitly keeps the function testable.
+    `senso` is optional. When absent, drafting happens with a direct LLM call on
+    the caller's own key, which is the path every open-source user takes. When
+    present, Senso is used instead so its brand-kit tone retrieval still applies.
+
+    `user_id` is the authed caller; required so outreach_log rows are scoped to
+    the right user. `logger` is an `outreach.log` module reference or any object
+    exposing `log_generate(...)`. Passing it explicitly keeps the function
+    testable.
     """
     if isinstance(purpose, str):
         purpose = Purpose(purpose)
@@ -76,20 +81,28 @@ def generate_drafts(
 
     for channel in channels_for(purpose):
         ct_config = CONTENT_TYPE_CONFIGS.get(channel, {"template": ""})
+        backend_name = "senso.generate" if senso else "llm.generate"
         with trace.step(
             session_id,
-            "senso.generate",
+            backend_name,
             purpose=purpose.value,
             channel=channel,
         ) as ctx:
             try:
-                ct_id = senso.get_or_create_content_type(channel, ct_config)
-                ctx["content_type_id"] = ct_id
-                job_id = senso.generate_sample(ct_id, full_context)
-                ctx["job_id"] = job_id
-                job = senso.poll_until_done(job_id, timeout_s=30.0, interval_s=1.0)
-                md = job.get("result", {}).get("raw_markdown", "")
-                draft_id = job.get("result", {}).get("content_id", "")
+                if senso is not None:
+                    ct_id = senso.get_or_create_content_type(channel, ct_config)
+                    ctx["content_type_id"] = ct_id
+                    job_id = senso.generate_sample(ct_id, full_context)
+                    ctx["job_id"] = job_id
+                    job = senso.poll_until_done(job_id, timeout_s=30.0, interval_s=1.0)
+                    md = job.get("result", {}).get("raw_markdown", "")
+                    draft_id = job.get("result", {}).get("content_id", "")
+                else:
+                    ct_id = ""
+                    job_id = ""
+                    draft_id = ""
+                    md = llm_draft.draft_channel(channel, full_context)
+
                 ctx["draft_chars"] = len(md)
                 if logger is not None:
                     logger.log_generate(
@@ -106,7 +119,7 @@ def generate_drafts(
                     markdown=md,
                     draft_id=draft_id,
                 ))
-            except Exception as exc:  # noqa: BLE001 -- demo path
+            except Exception as exc:  # noqa: BLE001 -- one channel failing must not cancel the rest
                 ctx["error"] = str(exc)
                 cards.append(DraftCard(
                     channel=channel,
