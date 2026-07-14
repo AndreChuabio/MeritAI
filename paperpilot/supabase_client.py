@@ -383,3 +383,58 @@ def upsert_arxiv(
         if owns:
             conn.close()
     return n
+
+
+# ---------------------------------------------------------------------------
+# Cost and quota queries over trace_log
+# ---------------------------------------------------------------------------
+
+def user_cost_usd(
+    user_id: str,
+    since: datetime | None = None,
+    conn: psycopg.Connection | None = None,
+) -> float:
+    """Total LLM spend attributed to one user, in USD.
+
+    Reads cost_usd out of the trace_log payload written by paperpilot.trace.
+    Events with no cost_usd (start events, non-LLM steps) contribute zero.
+    """
+    owns = conn is None
+    conn = conn or get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM((payload->>'cost_usd')::numeric), 0) "
+            "FROM trace_log "
+            "WHERE user_id = %s AND (%s IS NULL OR ts >= %s)",
+            (user_id, since, since),
+        ).fetchone()
+        return float(row[0]) if row else 0.0
+    finally:
+        if owns:
+            conn.close()
+
+
+def user_event_count(
+    user_id: str,
+    kind_prefix: str,
+    since: datetime,
+    conn: psycopg.Connection | None = None,
+) -> int:
+    """Count a user's trace events of a given kind since a timestamp.
+
+    Quota enforcement counts completed work, so callers should pass the
+    '.end' suffix in kind_prefix (e.g. 'evidence_dossier') and this matches
+    kind LIKE '<prefix>%.end'.
+    """
+    owns = conn is None
+    conn = conn or get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM trace_log "
+            "WHERE user_id = %s AND kind LIKE %s AND ts >= %s",
+            (user_id, f"{kind_prefix}%.end", since),
+        ).fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        if owns:
+            conn.close()
