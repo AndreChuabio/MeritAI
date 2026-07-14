@@ -1,8 +1,9 @@
 """Trace event helper.
 
 This is our redundancy against Lapdog. Every meaningful agent step calls
-log_event(); rows land in ClickHouse trace_log AND we keep them in process
-memory so the Streamlit UI can render them live without round-tripping to CH.
+log_event(); rows land in Supabase trace_log AND we keep them in process
+memory so the Streamlit UI can render them live without round-tripping to
+the database.
 
 Multi-tenancy: every session is bound to a user_id at creation time.
 Subsequent log_event / step calls automatically attach that user_id to
@@ -11,7 +12,6 @@ trace_log inserts so reads can be filtered per user.
 
 from __future__ import annotations
 
-import logging
 import os
 import uuid
 from contextlib import contextmanager
@@ -19,17 +19,12 @@ from dataclasses import dataclass
 from time import time
 from typing import Any, Iterator
 
-from paperpilot.clickhouse_client import insert_trace
+from paperpilot.supabase_client import insert_trace
 
 
-# clickhouse_connect prints "Unexpected Http Driver Exception" to a logger
-# before raising; silence it so half-configured local runs are not noisy.
-logging.getLogger("clickhouse_connect.driver.httpclient").setLevel(logging.CRITICAL)
-logging.getLogger("clickhouse_connect").setLevel(logging.CRITICAL)
-
-
-def _clickhouse_configured() -> bool:
-    return bool(os.environ.get("CLICKHOUSE_HOST"))
+def _ledger_configured() -> bool:
+    """True when a Supabase connection string is available to write traces to."""
+    return bool(os.environ.get("SUPABASE_DB_URL"))
 
 
 @dataclass
@@ -40,7 +35,8 @@ class TraceEvent:
     payload: dict[str, Any]
 
 
-# In-process buffer keyed by session_id so the UI can render without CH round-trip.
+# In-process buffer keyed by session_id so the UI can render without a
+# round-trip to the database.
 _BUFFER: dict[str, list[TraceEvent]] = {}
 
 # Session-id -> user_id binding established at new_session() time. log_event
@@ -68,17 +64,20 @@ def session_user(session_id: str) -> str:
 
 
 def log_event(session_id: str, kind: str, payload: dict[str, Any]) -> None:
-    """Record one agent step. Best-effort writes to ClickHouse; never raises.
+    """Record one agent step. Best-effort writes to Supabase; never raises.
 
     user_id for the trace_log row is resolved from the session binding set
     by new_session(). Sessions created outside that helper produce rows
-    with an empty user_id (legacy/system path).
+    with a NULL user_id (legacy/system path) -- trace_log.user_id is a uuid
+    column, so an unbound session must write NULL, not the empty string.
     """
     evt = TraceEvent(session_id=session_id, ts=time(), kind=kind, payload=payload)
     _BUFFER.setdefault(session_id, []).append(evt)
-    if not _clickhouse_configured():
+    if not _ledger_configured():
         return
-    user_id = _SESSION_USER.get(session_id, "")
+    # trace_log.user_id is a uuid column: an unbound session must write NULL,
+    # not the empty string, or the insert fails on the cast.
+    user_id = _SESSION_USER.get(session_id) or None
     try:
         insert_trace(session_id, user_id, kind, payload)
     except Exception as exc:  # noqa: BLE001 -- best-effort; never fail the run
