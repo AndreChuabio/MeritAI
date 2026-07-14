@@ -30,6 +30,16 @@ export interface Venue {
   acceptance_rate?: number | null;
 }
 
+/** A call-for-papers entry, as listed on the /cfp landing page. */
+export interface Cfp {
+  id: string;
+  name: string;
+  scope: string;
+  deadline: string | null;
+  format: string;
+  url: string;
+}
+
 export interface Citation {
   key: string;
   title: string;

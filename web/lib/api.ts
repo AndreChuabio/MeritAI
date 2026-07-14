@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import type {
   AssistHandlers,
   AssistSurface,
+  Cfp,
   Citation,
   DraftCard,
   DraftDone,
@@ -117,6 +118,20 @@ export const api = {
         ...(horizonDays !== undefined ? { horizon_days: horizonDays } : {}),
       },
     });
+  },
+
+  /** Chronological listing of the shared CFP corpus, with optional filters. */
+  async listCfps(filters?: {
+    q?: string;
+    format?: string;
+    upcoming?: boolean;
+  }): Promise<Cfp[]> {
+    const params = new URLSearchParams();
+    if (filters?.q) params.set("q", filters.q);
+    if (filters?.format) params.set("format", filters.format);
+    if (filters?.upcoming) params.set("upcoming", "true");
+    const qs = params.toString();
+    return requestJson<Cfp[]>(`/cfp${qs ? `?${qs}` : ""}`);
   },
 
   /**

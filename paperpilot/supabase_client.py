@@ -302,6 +302,45 @@ def match_cfp(
     ]
 
 
+def list_cfp(
+    search: str | None = None,
+    format_filter: str | None = None,
+    upcoming_only: bool = False,
+    conn: psycopg.Connection | None = None,
+) -> list[tuple[str, str, str, Any, str, str]]:
+    """List CFPs, optionally filtered, ordered chronologically by deadline.
+
+    Plain (non-semantic) listing for the CFP landing page. Returns rows of
+    (id, name, scope, deadline, format, url). Deadlines are ordered ascending
+    with nulls last; ties break on name for a stable order.
+    """
+    owns = conn is None
+    conn = conn or get_conn()
+    clauses: list[str] = []
+    params: list[Any] = []
+    if search:
+        clauses.append("(name ILIKE %s OR scope ILIKE %s)")
+        like = f"%{search}%"
+        params.extend([like, like])
+    if format_filter:
+        clauses.append("format = %s")
+        params.append(format_filter)
+    if upcoming_only:
+        clauses.append("deadline >= current_date")
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    try:
+        rows = conn.execute(
+            "SELECT id, name, scope, deadline, format, url "
+            f"FROM cfp {where} "
+            "ORDER BY deadline ASC NULLS LAST, name ASC",
+            params,
+        ).fetchall()
+    finally:
+        if owns:
+            conn.close()
+    return [(r[0], r[1], r[2], r[3], r[4], r[5]) for r in rows]
+
+
 def match_arxiv(
     q_emb: Sequence[float],
     limit: int,
