@@ -181,6 +181,111 @@ def test_user_event_count_counts_the_real_dossier_row(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# The NARRATIVE quota must count a REAL emitted event too.
+#
+# The real Track UI client (web/lib/api.ts evidence.narrative) POSTs with no
+# body, so backend.routers.evidence.draft_narrative resolves session_id=None
+# and calls evidence_service.draft_criterion_narrative(session_id=None) --
+# this is the actual production path, not a hypothetical. Before the fix,
+# the fallback `f"evidence_draft_{user_id}"` was a plain string never
+# registered with trace.new_session, so the emitted "evidence_draft.<crit>
+# .end" row carried a NULL user_id and user_event_count(user_id, ...) could
+# never see it: the 30/30-day narrative quota never fired. This drives the
+# real (unmocked) draft_criterion_narrative + trace.step + user_event_count
+# path end to end, with only the Supabase connection and the LLM call
+# stubbed out.
+# ---------------------------------------------------------------------------
+
+
+class _FakeDelta:
+    def __init__(self, content):
+        self.content = content
+
+
+class _FakeChoice:
+    def __init__(self, content):
+        self.delta = _FakeDelta(content)
+
+
+class _FakeUsage:
+    prompt_tokens = 10
+    completion_tokens = 5
+
+
+class _FakeStreamEvent:
+    def __init__(self, content=None, usage=None):
+        self.choices = [_FakeChoice(content)] if content is not None else []
+        self.usage = usage
+
+
+def _fake_stream():
+    yield _FakeStreamEvent(content="On behalf of the beneficiary, ")
+    yield _FakeStreamEvent(content="the evidence demonstrates...", usage=_FakeUsage())
+
+
+class _FakeCompletions:
+    def create(self, **kwargs):
+        return _fake_stream()
+
+
+class _FakeChat:
+    completions = _FakeCompletions()
+
+
+class _FakeLLMClient:
+    chat = _FakeChat()
+
+
+def test_draft_criterion_narrative_emits_a_countable_evidence_draft_event(monkeypatch):
+    """This is the real Track UI path: web/lib/api.ts posts no body, so the
+    route passes session_id=None straight into draft_criterion_narrative."""
+    user_id = "33333333-3333-3333-3333-333333333333"
+    criterion = USCIS_O1A_CRITERIA[0][0]
+
+    monkeypatch.setattr(evidence_service.supabase_client, "get_conn", lambda: _FakeConn())
+    monkeypatch.setattr(
+        evidence_service, "list_evidence", lambda user_id, criterion=None, conn=None: []
+    )
+    monkeypatch.setattr(
+        evidence_service, "_find_user_profile_by_id", lambda user_id, conn=None: None
+    )
+    monkeypatch.setattr(evidence_service, "get_client", lambda: _FakeLLMClient())
+
+    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://stub")
+    captured: list[tuple[str, str | None, str, dict]] = []
+    monkeypatch.setattr(
+        trace,
+        "insert_trace",
+        lambda session_id, user_id, kind, payload: captured.append(
+            (session_id, user_id, kind, payload)
+        ),
+    )
+
+    narrative = evidence_service.draft_criterion_narrative(
+        user_id=user_id, criterion=criterion, session_id=None
+    )
+
+    assert narrative  # the streamed text was actually assembled and returned
+
+    end_events = [c for c in captured if c[2] == f"evidence_draft.{criterion}.end"]
+    assert len(end_events) == 1, (
+        "draft_criterion_narrative must emit exactly one "
+        f"evidence_draft.{criterion}.end trace event; captured kinds were "
+        f"{[c[2] for c in captured]}"
+    )
+    _, event_user_id, _, _ = end_events[0]
+    assert event_user_id == user_id, (
+        "the trace_log row must carry the real user_id, not NULL, or "
+        "user_event_count can never scope narrative usage to this user -- "
+        "this is the exact quota bypass a session_id=None caller hits on "
+        "the real Track UI narrative path"
+    )
+
+    like_pattern = f"{quotas.NARRATIVE.kind_prefix}%.end"
+    assert fnmatch.fnmatch(f"evidence_draft.{criterion}.end", like_pattern.replace("%", "*"))
+
+
+# ---------------------------------------------------------------------------
 # Routes must call quotas.enforce() before doing any work.
 # ---------------------------------------------------------------------------
 

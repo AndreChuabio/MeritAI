@@ -424,7 +424,14 @@ def draft_criterion_narrative(
     # system message, and Scholar handling stay identical across both apps.
     user_prompt = draft_mod._build_user_prompt(criterion, items, profile)
     model = DEFAULTS["draft"]
-    sid = session_id or f"evidence_draft_{user_id}"
+    # trace.log_event resolves trace_log.user_id from the _SESSION_USER
+    # registry, which only trace.new_session() populates. The real Track UI
+    # client (web/lib/api.ts evidence.narrative) posts no body, so this
+    # endpoint always receives session_id=None -- a plain fallback string
+    # here would never be registered and the row would carry a NULL
+    # user_id, making backend.quotas.NARRATIVE's user_event_count() always
+    # return 0. Mint a real bound session instead, same fix as build_dossier.
+    sid = session_id or trace.new_session(user_id)
 
     with trace.step(
         sid,
