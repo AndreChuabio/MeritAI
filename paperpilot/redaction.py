@@ -7,6 +7,11 @@ paperpilot.trace's payload scrubber.
 
 Lives in paperpilot rather than backend because paperpilot.trace needs it and
 backend already depends on paperpilot -- the reverse would be circular.
+
+redact_text also imports paperpilot.gateway to reach the literal key bound
+to the current request (gateway.current_request_key()). This direction is
+safe: gateway.py has no imports from paperpilot, so redaction -> gateway
+cannot cycle back. gateway.py must never import this module.
 """
 
 from __future__ import annotations
@@ -15,7 +20,16 @@ import logging
 import re
 import traceback
 
+from paperpilot import gateway
+
 REDACTED = "[REDACTED]"
+
+# byok.require_llm_key accepts any non-empty string as a gateway key, so a
+# key that matches none of _SECRET_PATTERNS below is otherwise logged in
+# full. Below this length, substituting the bound key risks corrupting
+# unrelated log text that happens to contain the same short substring, so a
+# degenerate bound key (empty string, or shorter than this) is skipped.
+_MIN_BOUND_KEY_LENGTH = 8
 
 # Field names whose values are secrets, lowercased for comparison.
 SENSITIVE_KEYS: frozenset[str] = frozenset(
@@ -43,9 +57,22 @@ _SECRET_PATTERNS = [
 
 
 def redact_text(text: str) -> str:
-    """Replace anything that looks like a credential in free text."""
+    """Replace anything that looks like a credential in free text.
+
+    Two independent mechanisms, both applied:
+    1. Shape patterns (_SECRET_PATTERNS) -- catches keys from env vars,
+       other providers, or any surface that never binds a request key.
+    2. The literal key bound to the current request via
+       gateway.set_request_key(), if any -- catches BYOK keys that do not
+       match any known shape, since byok.require_llm_key accepts any
+       non-empty string. Skipped if nothing is bound or the bound value is
+       too short to be a real credential (see _MIN_BOUND_KEY_LENGTH).
+    """
     for pattern in _SECRET_PATTERNS:
         text = pattern.sub(REDACTED, text)
+    bound_key = gateway.current_request_key()
+    if bound_key and len(bound_key) >= _MIN_BOUND_KEY_LENGTH:
+        text = text.replace(bound_key, REDACTED)
     return text
 
 

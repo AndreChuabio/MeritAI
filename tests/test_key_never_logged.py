@@ -3,10 +3,16 @@
 import io
 import logging
 
-from paperpilot import redaction, trace
+from paperpilot import gateway, redaction, trace
 from paperpilot.redaction import RedactKeyFilter, SENSITIVE_KEYS
 
 SECRET = "vck_super_secret_user_key"
+
+# byok.require_llm_key accepts any non-empty string as a gateway key -- it is
+# not required to match one of the shape patterns below. This key matches
+# none of them, so only literal substitution of the bound request key (not
+# _SECRET_PATTERNS) can catch it.
+NON_SHAPED_SECRET = "gw-live-1234567890abcdef"
 
 
 def test_trace_payload_scrubs_sensitive_keys(monkeypatch):
@@ -106,6 +112,100 @@ def test_module_logger_redacted_in_real_handler_output():
     finally:
         root.removeHandler(handler)
         root.setLevel(previous_level)
+
+    output = stream.getvalue()
+    assert SECRET not in output
+    assert "[REDACTED]" in output
+
+
+def _capture_via_real_handler() -> tuple[io.StringIO, logging.StreamHandler, logging.Logger]:
+    """Attach a real StreamHandler+Formatter to root, like production wiring.
+
+    caplog can bypass normal handler formatting, so the tests below drive a
+    genuine StreamHandler over a StringIO with a real Formatter -- the same
+    path a shape-only redactor was previously proven to leak through.
+    """
+    redaction.install()
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter("%(name)s %(levelname)s %(message)s"))
+    root = logging.getLogger()
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    return stream, handler, root
+
+
+def test_literal_bound_key_redacted_when_shape_matches_nothing():
+    """byok.require_llm_key accepts ANY non-empty string as the gateway key,
+    not just vck_/sk-ant-/sk-/AIza shapes. A key outside those shapes must
+    still be redacted once it is bound as the current request's key, or the
+    no-custody promise silently fails for every non-Vercel-shaped key."""
+    stream, handler, root = _capture_via_real_handler()
+    gateway.set_request_key(NON_SHAPED_SECRET)
+    try:
+        logging.getLogger("paperpilot.pipeline").warning(
+            "calling gateway with key %s", NON_SHAPED_SECRET
+        )
+    finally:
+        gateway.set_request_key(None)
+        root.removeHandler(handler)
+
+    output = stream.getvalue()
+    assert NON_SHAPED_SECRET not in output
+    assert "[REDACTED]" in output
+
+
+def test_literal_bound_key_redacted_in_traceback():
+    """The same non-shaped key, echoed back inside an exception traceback
+    (e.g. an upstream SDK's AuthenticationError message), must also be
+    redacted -- not just the log message template."""
+    stream, handler, root = _capture_via_real_handler()
+    gateway.set_request_key(NON_SHAPED_SECRET)
+    try:
+        try:
+            raise RuntimeError(f"Incorrect API key provided: {NON_SHAPED_SECRET}")
+        except RuntimeError:
+            logging.getLogger("paperpilot.pipeline").exception("draft failed")
+    finally:
+        gateway.set_request_key(None)
+        root.removeHandler(handler)
+
+    output = stream.getvalue()
+    assert NON_SHAPED_SECRET not in output
+    assert "[REDACTED]" in output
+
+
+def test_short_bound_key_does_not_corrupt_unrelated_log_text():
+    """A degenerate bound key (empty, or too short to be a real credential)
+    must not turn substring matches in unrelated log text into [REDACTED].
+    Substituting a 3-character key would corrupt any log line that happens
+    to contain that substring."""
+    stream, handler, root = _capture_via_real_handler()
+    gateway.set_request_key("abc")
+    try:
+        logging.getLogger("paperpilot.pipeline").warning(
+            "fetched abcdef123 from cache, abcxyz unaffected"
+        )
+    finally:
+        gateway.set_request_key(None)
+        root.removeHandler(handler)
+
+    output = stream.getvalue()
+    assert "abcdef123" in output
+    assert "abcxyz" in output
+    assert "[REDACTED]" not in output
+
+
+def test_shape_pattern_still_redacts_with_no_key_bound():
+    """With nothing bound to the request context (env-var key, other
+    providers, or a surface that never calls set_request_key), the existing
+    shape patterns must keep working exactly as before."""
+    stream, handler, root = _capture_via_real_handler()
+    gateway.set_request_key(None)
+    try:
+        logging.getLogger("paperpilot.pipeline").warning("key %s", SECRET)
+    finally:
+        root.removeHandler(handler)
 
     output = stream.getvalue()
     assert SECRET not in output

@@ -34,6 +34,19 @@ def set_request_key(key: str | None) -> None:
     _REQUEST_KEY.set(key or None)
 
 
+def current_request_key() -> str | None:
+    """Return the gateway key bound to the current request context, if any.
+
+    Read-only counterpart to set_request_key(). paperpilot.redaction imports
+    this to redact the literal bound key from logs -- byok.require_llm_key
+    accepts any non-empty string, not just the shapes redaction's regex
+    patterns recognize, so the shape patterns alone cannot catch every key.
+    This module must not import paperpilot.redaction (or anything else in
+    paperpilot) to keep that import direction acyclic.
+    """
+    return _REQUEST_KEY.get()
+
+
 def get_client() -> OpenAI:
     """Return an OpenAI client pointed at Vercel AI Gateway.
 
