@@ -47,6 +47,21 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Thrown by requestJson on a non-OK response. Carries the HTTP status so
+ * callers can branch on specific codes (e.g. 413 "bundle too large, needs
+ * confirm_large") without parsing the message string.
+ */
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function authedFetch(
   path: string,
   options: RequestOptions = {},
@@ -76,7 +91,7 @@ async function requestJson<T>(
   const response = await authedFetch(path, options);
   if (!response.ok) {
     const detail = await safeErrorDetail(response);
-    throw new Error(detail);
+    throw new ApiError(response.status, detail);
   }
   return (await response.json()) as T;
 }
@@ -97,10 +112,13 @@ export const api = {
     return requestJson<MeResponse>("/me");
   },
 
-  async ingest(repoUrl: string): Promise<IngestResult> {
+  async ingest(repoUrl: string, confirmLarge?: boolean): Promise<IngestResult> {
     return requestJson<IngestResult>("/ingest", {
       method: "POST",
-      body: { repo_url: repoUrl },
+      body: {
+        repo_url: repoUrl,
+        ...(confirmLarge ? { confirm_large: true } : {}),
+      },
     });
   },
 
@@ -357,10 +375,16 @@ export const api = {
     });
   },
 
-  async extractPlugin(repoUrl: string): Promise<PluginResult> {
+  async extractPlugin(
+    repoUrl: string,
+    sessionId?: string | null,
+  ): Promise<PluginResult> {
     return requestJson<PluginResult>("/extract-plugin", {
       method: "POST",
-      body: { repo_url: repoUrl },
+      body: {
+        repo_url: repoUrl,
+        ...(sessionId ? { session_id: sessionId } : {}),
+      },
     });
   },
 

@@ -247,18 +247,28 @@ def fetch_artifacts(
 def fetch_artifact_content(
     session_id: str,
     artifact_name: str,
+    user_id: str | None = None,
     conn: psycopg.Connection | None = None,
 ) -> str | None:
-    """Pull the raw content blob for one specific artifact (newest match)."""
+    """Pull the raw content blob for one specific artifact (newest match).
+
+    user_id is optional and, when given, scopes the lookup to that caller so
+    one tenant cannot read another tenant's cached artifact by guessing or
+    replaying a session id.
+    """
     owns = conn is None
     conn = conn or get_conn()
+    where = ["session_id = %s", "artifact_name = %s"]
+    params: list[Any] = [session_id, artifact_name]
+    if user_id is not None:
+        where.append("user_id = %s")
+        params.append(user_id)
+    sql = (
+        "SELECT content FROM session_artifacts "
+        "WHERE " + " AND ".join(where) + " ORDER BY ts DESC LIMIT 1"
+    )
     try:
-        row = conn.execute(
-            "SELECT content FROM session_artifacts "
-            "WHERE session_id = %s AND artifact_name = %s "
-            "ORDER BY ts DESC LIMIT 1",
-            (session_id, artifact_name),
-        ).fetchone()
+        row = conn.execute(sql, params).fetchone()
     finally:
         if owns:
             conn.close()

@@ -4,6 +4,15 @@ Wraps the existing paperpilot plugin pipeline (github_ingest -> skill_extract
 -> skill_render) and persists the rendered Claude Code plugin zip to
 session_artifacts. No LLM logic lives here; it is delegated to
 paperpilot.skill_extract.extract_plugin.
+
+Bundle reuse: /ingest already fetches and renders the repo bundle for a
+session and stores it as a "repo_bundle" artifact (see ingest_service.py).
+When /extract-plugin is called with that same session_id, it reads the
+stored bundle instead of re-fetching from GitHub and re-assembling it --
+that fetch-and-render pass, on a large repo, is real work done on the user's
+behalf and there is no reason to pay for it twice. A plugin-only run (no
+prior /ingest call in the session) still works: with nothing cached, it
+falls back to a fresh fetch.
 """
 
 from __future__ import annotations
@@ -15,9 +24,36 @@ import uuid
 from dataclasses import dataclass
 
 from paperpilot import supabase_client
-from paperpilot.github_ingest import fetch_repo
+from paperpilot.github_ingest import _parse_repo_url, fetch_repo, render_bundle
 from paperpilot.skill_extract import PluginPack, extract_plugin
 from paperpilot.skill_render import build_plugin_zip, render_plugin_manifest
+
+
+def fetch_repo_bundle(repo_url: str) -> str:
+    """Fetch a repo from GitHub and render it into the text sent to the LLM.
+
+    Wraps github_ingest.fetch_repo + render_bundle so callers (and tests) can
+    treat "get me the bundle text for this repo" as one step, regardless of
+    whether it is served from cache or fetched fresh.
+    """
+    return render_bundle(fetch_repo(repo_url))
+
+
+def _load_bundle(session_id: str, user_id: str, repo_url: str) -> str:
+    """Return the repo bundle text for this session, fetching only if not cached.
+
+    /ingest already fetched, rendered, and paid for this bundle when it ran
+    in this session. Re-fetching and re-rendering it here would double the
+    GitHub calls and the bundle-assembly cost of a Productize run for no
+    benefit. Only a plugin-only run (no prior /ingest in this session) falls
+    back to fetching fresh.
+    """
+    cached = supabase_client.fetch_artifact_content(
+        session_id, "repo_bundle", user_id=user_id
+    )
+    if cached:
+        return cached
+    return fetch_repo_bundle(repo_url)
 
 
 @dataclass(frozen=True)
@@ -29,7 +65,9 @@ class PluginResult:
     zip_bytes: bytes
 
 
-def extract_plugin_from_repo(repo_url: str, user_id: str) -> PluginResult:
+def extract_plugin_from_repo(
+    repo_url: str, user_id: str, session_id: str | None = None
+) -> PluginResult:
     """Fetch a repo, extract a PluginPack, render the plugin zip, and persist it.
 
     The repo bundle feeds a single Gateway LLM call (in extract_plugin) that
@@ -43,17 +81,23 @@ def extract_plugin_from_repo(repo_url: str, user_id: str) -> PluginResult:
     Args:
         repo_url: GitHub repository URL to extract the plugin from.
         user_id: Supabase auth UUID of the authenticated caller.
+        session_id: The session id from a prior /ingest call on this same
+            repo, if any. When given, the bundle stored by that ingest is
+            reused instead of re-fetched. When absent (a plugin-only run
+            with no prior ingest), a fresh session id is generated and the
+            bundle is fetched fresh.
 
     Returns:
         A PluginResult with the kebab-case plugin name, the parsed manifest,
         and the raw zip bytes for the caller to base64-encode for the response.
     """
-    session_id = str(uuid.uuid4())
+    session_id = session_id or str(uuid.uuid4())
     source_repo = repo_url.strip()
+    owner, name = _parse_repo_url(source_repo)
+    source_label = f"{owner}/{name}"
 
-    bundle = fetch_repo(source_repo)
-    pack: PluginPack = extract_plugin(bundle, session_id)
-    source_label = f"{bundle.owner}/{bundle.name}"
+    rendered = _load_bundle(session_id=session_id, user_id=user_id, repo_url=source_repo)
+    pack: PluginPack = extract_plugin(rendered, session_id, repo_label=source_label)
 
     zip_bytes = build_plugin_zip(pack, source_label)
     manifest = json.loads(render_plugin_manifest(pack, source_label))

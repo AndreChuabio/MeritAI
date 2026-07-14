@@ -23,6 +23,10 @@ class ExtractPluginRequest(BaseModel):
     """Request body for plugin extraction."""
 
     repo_url: str
+    # session_id from a prior /ingest call on this repo, if any. When given,
+    # the repo bundle that ingest already fetched and rendered is reused
+    # instead of fetched again. Omit for a plugin-only run.
+    session_id: str | None = None
 
 
 class ExtractPluginResponse(BaseModel):
@@ -53,7 +57,7 @@ def extract_plugin_endpoint(
         )
 
     try:
-        result = extract_plugin_from_repo(repo_url, user.id)
+        result = extract_plugin_from_repo(repo_url, user.id, session_id=req.session_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)

@@ -18,6 +18,7 @@ export interface IngestResult {
   repo_url: string;
   files_analyzed?: number;
   notes?: string;
+  session_id?: string;
 }
 
 export interface Venue {
