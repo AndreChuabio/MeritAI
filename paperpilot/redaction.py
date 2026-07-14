@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import traceback
 
 REDACTED = "[REDACTED]"
 
@@ -48,23 +49,112 @@ def redact_text(text: str) -> str:
     return text
 
 
+def _redact_message(record: logging.LogRecord) -> None:
+    """Rewrite record.msg/args in place if the rendered message has a secret."""
+    try:
+        message = record.getMessage()
+    except Exception:  # noqa: BLE001 -- never break logging
+        return
+    cleaned = redact_text(message)
+    if cleaned != message:
+        record.msg = cleaned
+        record.args = ()
+
+
+def _redact_traceback(record: logging.LogRecord) -> None:
+    """Pre-populate record.exc_text with a redacted, formatted traceback.
+
+    logging.Formatter.format() calls formatException(record.exc_info)
+    SEPARATELY from formatting record.msg, and only if record.exc_text is
+    not already set (it caches the result on the record). Rewriting msg
+    alone therefore never touches the traceback text -- a secret echoed
+    back by an upstream exception (e.g. an SDK's AuthenticationError)
+    survives straight into the formatted log line. Pre-computing a
+    redacted exc_text here is what makes the fix stick regardless of which
+    Formatter eventually renders the record.
+    """
+    if not record.exc_info:
+        return
+    try:
+        formatted = "".join(traceback.format_exception(*record.exc_info))
+    except Exception:  # noqa: BLE001 -- never break logging
+        return
+    if formatted.endswith("\n"):
+        formatted = formatted[:-1]
+    record.exc_text = redact_text(formatted)
+
+
+def _redact_stack_info(record: logging.LogRecord) -> None:
+    """Redact record.stack_info, which Formatter.format() appends verbatim."""
+    stack_info = getattr(record, "stack_info", None)
+    if stack_info:
+        try:
+            record.stack_info = redact_text(stack_info)
+        except Exception:  # noqa: BLE001 -- never break logging
+            pass
+
+
 class RedactKeyFilter(logging.Filter):
-    """Strip credentials from log records before they are emitted anywhere."""
+    """Strip credentials from log records before they are emitted anywhere.
+
+    Kept as defense-in-depth (attached to handlers/loggers by install()),
+    but the LogRecordFactory installed below is what actually guarantees
+    redaction -- see install()'s docstring.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        try:
-            message = record.getMessage()
-        except Exception:  # noqa: BLE001 -- never break logging
-            return True
-        cleaned = redact_text(message)
-        if cleaned != message:
-            record.msg = cleaned
-            record.args = ()
+        _redact_message(record)
+        _redact_traceback(record)
+        _redact_stack_info(record)
         return True
 
 
+_installed = False
+
+
 def install() -> None:
-    """Attach the redaction filter to the root logger and uvicorn's loggers."""
+    """Make redaction independent of logger and handler topology.
+
+    Every logging call in this repo uses a module logger
+    (logging.getLogger(__name__)) -- 26+ sites. Python's Logger.handle()
+    only consults FILTERS on the logger where the record originated;
+    Logger.callHandlers() then walks ancestors and invokes their HANDLERS,
+    never their filters. So attaching a filter only to the root and
+    uvicorn loggers (the previous approach) never redacted any module
+    logger's records -- only records logged directly to those exact
+    logger names.
+
+    logging.setLogRecordFactory wraps the record constructor itself, which
+    every logger (module or otherwise) calls to build its LogRecord before
+    any filter or handler is consulted. Wrapping it here means every
+    record is redacted -- message, interpolated args, and traceback --
+    regardless of which logger emitted it or what handlers exist anywhere
+    in the hierarchy.
+
+    Idempotent: calling this more than once (e.g. both backend.main and a
+    test) does not double-wrap the factory.
+    """
+    global _installed
+    if _installed:
+        return
+
+    base_factory = logging.getLogRecordFactory()
+
+    def factory(*args: object, **kwargs: object) -> logging.LogRecord:
+        record = base_factory(*args, **kwargs)
+        _redact_message(record)
+        _redact_traceback(record)
+        _redact_stack_info(record)
+        return record
+
+    logging.setLogRecordFactory(factory)
+
+    # Defense-in-depth: also attach the filter to root/uvicorn loggers so
+    # anything that bypasses the factory (e.g. a handler-level filter
+    # someone adds later, or a record built by hand) still gets a second
+    # pass.
     filt = RedactKeyFilter()
     for name in ("", "uvicorn", "uvicorn.access", "uvicorn.error"):
         logging.getLogger(name).addFilter(filt)
+
+    _installed = True
