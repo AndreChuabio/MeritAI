@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool
 
+from backend import quotas
 from backend.auth import AuthUser, CurrentUser
 from backend.services.assist_service import assist_answer
 from paperpilot import trace
@@ -54,6 +55,7 @@ async def assist(
     A new trace session is started for the run, bound to the authenticated
     user so trace rows are tenant-scoped.
     """
+    quotas.enforce(user.id, quotas.ASSIST)
     session_id = trace.new_session(user.id)
 
     async def event_stream() -> AsyncIterator[dict[str, Any]]:

@@ -536,78 +536,93 @@ def build_dossier(user_id: str, session_id: Optional[str] = None) -> bytes:
     footer, styles); only the evidence, satisfied count, profile, and
     narratives are sourced from Supabase.
 
+    The build is wrapped in a trace.step so it emits an "evidence_dossier.end"
+    event on success -- this is what backend.quotas.DOSSIER counts against.
+    Without it, a build_dossier call left no row a quota could ever match. If
+    no session_id is supplied, one is minted with trace.new_session(user_id)
+    so the trace_log row is bound to the real caller instead of being
+    written with a NULL user_id (a session id that was never registered via
+    trace.new_session resolves to no user binding at log time).
+
     Returns the PDF bytes. Raises RuntimeError if narrative drafting or PDF
     rendering fails; no partial / empty bytes are returned.
     """
     if not user_id:
         raise ValueError("user_id is required")
 
-    conn = supabase_client.get_conn()
-    try:
-        grouped = evidence_by_criterion(user_id, conn=conn)
-        satisfied = count_satisfied_criteria(user_id, conn=conn)
-        profile = _find_user_profile_by_id(user_id, conn=conn)
-    finally:
-        conn.close()
+    sid = session_id or trace.new_session(user_id)
 
-    try:
-        narratives = _draft_all_narratives(user_id, grouped, session_id=session_id)
-    except Exception as exc:  # noqa: BLE001 -- escalate per contract
-        raise RuntimeError(
-            f"failed to draft O-1A narratives for user_id={user_id!r}"
-        ) from exc
+    with trace.step(sid, "evidence_dossier", user_id=user_id) as ctx:
+        conn = supabase_client.get_conn()
+        try:
+            grouped = evidence_by_criterion(user_id, conn=conn)
+            satisfied = count_satisfied_criteria(user_id, conn=conn)
+            profile = _find_user_profile_by_id(user_id, conn=conn)
+        finally:
+            conn.close()
 
-    try:
-        display_name = (profile.name.strip() if profile and profile.name else "") or user_id
-        title_line = (profile.title.strip() if profile and profile.title else "") or None
+        try:
+            narratives = _draft_all_narratives(user_id, grouped, session_id=sid)
+        except Exception as exc:  # noqa: BLE001 -- escalate per contract
+            raise RuntimeError(
+                f"failed to draft O-1A narratives for user_id={user_id!r}"
+            ) from exc
 
-        styles = dossier_mod._make_styles()
-        today = datetime.utcnow().date()
+        try:
+            display_name = (profile.name.strip() if profile and profile.name else "") or user_id
+            title_line = (profile.title.strip() if profile and profile.title else "") or None
 
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=LETTER,
-            leftMargin=1.0 * inch,
-            rightMargin=1.0 * inch,
-            topMargin=1.0 * inch,
-            bottomMargin=1.0 * inch,
-            title="O-1A Evidence Dossier",
-            author=display_name,
-        )
+            styles = dossier_mod._make_styles()
+            today = datetime.utcnow().date()
 
-        story: list = []
-        story.extend(
-            dossier_mod._cover_flowables(
-                user_id, display_name, title_line, styles, today
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=LETTER,
+                leftMargin=1.0 * inch,
+                rightMargin=1.0 * inch,
+                topMargin=1.0 * inch,
+                bottomMargin=1.0 * inch,
+                title="O-1A Evidence Dossier",
+                author=display_name,
             )
-        )
-        story.extend(dossier_mod._summary_flowables(satisfied, styles))
 
-        for idx, (key, label) in enumerate(USCIS_O1A_CRITERIA, start=1):
-            items = grouped.get(key, [])
-            narrative = (narratives.get(key) or "").strip()
+            story: list = []
             story.extend(
-                dossier_mod._criterion_section_flowables(
-                    idx, key, label, items, narrative, styles
+                dossier_mod._cover_flowables(
+                    user_id, display_name, title_line, styles, today
                 )
             )
+            story.extend(dossier_mod._summary_flowables(satisfied, styles))
 
-        doc.build(
-            story,
-            onFirstPage=dossier_mod._on_page,
-            onLaterPages=dossier_mod._on_page,
-        )
-        pdf_bytes = buffer.getvalue()
-    except Exception as exc:  # noqa: BLE001 -- escalate per contract
-        raise RuntimeError(
-            f"failed to render O-1A dossier PDF for user_id={user_id!r}"
-        ) from exc
+            for idx, (key, label) in enumerate(USCIS_O1A_CRITERIA, start=1):
+                items = grouped.get(key, [])
+                narrative = (narratives.get(key) or "").strip()
+                story.extend(
+                    dossier_mod._criterion_section_flowables(
+                        idx, key, label, items, narrative, styles
+                    )
+                )
 
-    if not pdf_bytes:
-        raise RuntimeError(
-            f"reportlab produced empty PDF bytes for user_id={user_id!r}"
-        )
+            doc.build(
+                story,
+                onFirstPage=dossier_mod._on_page,
+                onLaterPages=dossier_mod._on_page,
+            )
+            pdf_bytes = buffer.getvalue()
+        except Exception as exc:  # noqa: BLE001 -- escalate per contract
+            raise RuntimeError(
+                f"failed to render O-1A dossier PDF for user_id={user_id!r}"
+            ) from exc
+
+        if not pdf_bytes:
+            raise RuntimeError(
+                f"reportlab produced empty PDF bytes for user_id={user_id!r}"
+            )
+
+        ctx["criteria_satisfied"] = satisfied
+        ctx["pdf_bytes"] = len(pdf_bytes)
+
     return pdf_bytes
 
 
