@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from backend.auth import AuthUser, CurrentUser
+from backend.byok import RequireLLMKey
 from backend.services.plugin_service import extract_plugin_from_repo
 
 router = APIRouter(tags=["plugin"])
@@ -34,7 +35,9 @@ class ExtractPluginResponse(BaseModel):
 
 @router.post("/extract-plugin", response_model=ExtractPluginResponse)
 def extract_plugin_endpoint(
-    req: ExtractPluginRequest, user: AuthUser = CurrentUser
+    req: ExtractPluginRequest,
+    user: AuthUser = CurrentUser,
+    _: None = RequireLLMKey,
 ) -> ExtractPluginResponse:
     """Extract a Claude Code plugin from a GitHub repo and return it zipped.
 

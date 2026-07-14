@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.auth import AuthUser, CurrentUser
+from backend.byok import RequireLLMKey
 from backend.routers import assist, draft, evidence, export, ingest, market, plugin
 from backend.venues import rank_venues
 from paperpilot import supabase_client
@@ -103,7 +104,11 @@ def me(user: AuthUser = CurrentUser) -> MeResponse:
 
 
 @app.post("/match", response_model=list[VenueResponse])
-def match(req: MatchRequest, user: AuthUser = CurrentUser) -> list[VenueResponse]:
+def match(
+    req: MatchRequest,
+    user: AuthUser = CurrentUser,
+    _: None = RequireLLMKey,
+) -> list[VenueResponse]:
     """Rank open CFP venues for a research summary via Supabase pgvector."""
     matches = rank_venues(req.summary, limit=req.limit, horizon_days=req.horizon_days)
     return [

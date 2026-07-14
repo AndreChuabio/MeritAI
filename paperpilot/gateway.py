@@ -12,6 +12,7 @@ Lapdog intercepts these calls when the process is wrapped via
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar
 
 from openai import OpenAI
 
@@ -20,14 +21,33 @@ GATEWAY_BASE_URL = os.environ.get(
     "AI_GATEWAY_BASE_URL", "https://ai-gateway.vercel.sh/v1"
 )
 
+# The caller's own gateway key, bound per request by backend.byok. A ContextVar
+# rather than a parameter because get_client() has nine call sites across the
+# pipeline and the key must not be threaded through all of them. Starlette runs
+# each request in its own task, so each request gets its own context copy and
+# keys cannot leak between concurrent callers.
+_REQUEST_KEY: ContextVar[str | None] = ContextVar("merit_request_llm_key", default=None)
+
+
+def set_request_key(key: str | None) -> None:
+    """Bind (or clear) the caller's gateway key for the current request context."""
+    _REQUEST_KEY.set(key or None)
+
 
 def get_client() -> OpenAI:
-    """Return an OpenAI client pointed at Vercel AI Gateway."""
-    api_key = os.environ.get("AI_GATEWAY_API_KEY")
+    """Return an OpenAI client pointed at Vercel AI Gateway.
+
+    Prefers the caller's own key when one is bound to this request (BYOK), and
+    otherwise falls back to the server's key. Surfaces that run on Merit's dime
+    (Track, the help assistant) bind nothing and get the server key; surfaces
+    that run on the user's key (Productize, Market) bind theirs.
+    """
+    api_key = _REQUEST_KEY.get() or os.environ.get("AI_GATEWAY_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "AI_GATEWAY_API_KEY missing. Get one at "
-            "https://vercel.com/dashboard/ai-gateway and add to .env"
+            "No LLM API key available. Supply one via the X-LLM-Key header, or "
+            "set AI_GATEWAY_API_KEY. Get a key at "
+            "https://vercel.com/dashboard/ai-gateway"
         )
     return OpenAI(base_url=GATEWAY_BASE_URL, api_key=api_key)
 

@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from backend.auth import AuthUser, CurrentUser
+from backend.byok import RequireLLMKey
 from backend.services.ingest_service import ingest_repo
 from paperpilot.llm_ingest import ResearchSummary
 
@@ -39,7 +40,11 @@ class IngestResponse(BaseModel):
 
 
 @router.post("", response_model=IngestResponse)
-def ingest(req: IngestRequest, user: AuthUser = CurrentUser) -> IngestResponse:
+def ingest(
+    req: IngestRequest,
+    user: AuthUser = CurrentUser,
+    _: None = RequireLLMKey,
+) -> IngestResponse:
     """Ingest a GitHub repo and return its ResearchSummary.
 
     Parses the repo, bundles a token-capped sample of files, and summarizes
