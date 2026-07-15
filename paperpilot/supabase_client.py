@@ -129,16 +129,25 @@ def insert_trace(
 
 
 def fetch_traces(
-    session_id: str, conn: psycopg.Connection | None = None
+    session_id: str, user_id: str, conn: psycopg.Connection | None = None
 ) -> list[dict[str, Any]]:
-    """Return all trace events for a session in chronological order."""
+    """Return all trace events for a session in chronological order.
+
+    user_id is required and scopes the read. session_id alone is not a
+    secret -- it is echoed to the client and threaded through requests, so a
+    caller who guessed or replayed another tenant's session_id must not be
+    able to read that tenant's trace events (which can include cost_usd and
+    prompt/criterion metadata) through the service-role connection.
+    """
+    if not user_id:
+        raise ValueError("user_id is required")
     owns = conn is None
     conn = conn or get_conn()
     try:
         rows = conn.execute(
             "SELECT ts, kind, payload FROM trace_log "
-            "WHERE session_id = %s ORDER BY ts",
-            (session_id,),
+            "WHERE session_id = %s AND user_id = %s ORDER BY ts",
+            (session_id, user_id),
         ).fetchall()
     finally:
         if owns:
