@@ -88,7 +88,7 @@ seed-senso:
 # Print the outreach demo rehearsal script.
 outreach-demo:
 	@echo "Outreach demo rehearsal:"
-	@echo "  1. Brand tab: confirm pre-synced brand kit for 'Nikki' loads."
+	@echo "  1. Brand tab: confirm pre-synced brand kit loads."
 	@echo "  2. Outreach tab: pick VISA, type 'apply to keynote at ML4H 2026', Generate."
 	@echo "  3. Track tab: confirm score, Scholar climbs to 14/20, drafts list shows."
 	@echo ""
