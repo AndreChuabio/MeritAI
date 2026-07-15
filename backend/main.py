@@ -14,14 +14,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.auth import AuthUser, CurrentUser
-from backend.routers import assist, draft, evidence, export, ingest, market, plugin
+from backend.byok import RequireLLMKey
+from backend.routers import account, assist, draft, evidence, export, ingest, market, plugin
 from backend.venues import rank_venues
-from paperpilot import supabase_client
+from paperpilot import redaction, supabase_client
 from paperpilot.llm_ingest import ResearchSummary
 
 load_dotenv()
 
 app = FastAPI(title="Merit API", version="0.1.0")
+
+redaction.install()
 
 # CORS for the Next.js frontend. Explicit origins (localhost + the production
 # domain) come from FRONTEND_ORIGINS; the regex additionally allows every
@@ -52,6 +55,7 @@ app.include_router(plugin.router)
 app.include_router(evidence.router)
 app.include_router(market.router)
 app.include_router(assist.router)
+app.include_router(account.router)
 
 
 class HealthResponse(BaseModel):
@@ -103,7 +107,11 @@ def me(user: AuthUser = CurrentUser) -> MeResponse:
 
 
 @app.post("/match", response_model=list[VenueResponse])
-def match(req: MatchRequest, user: AuthUser = CurrentUser) -> list[VenueResponse]:
+def match(
+    req: MatchRequest,
+    user: AuthUser = CurrentUser,
+    _: None = RequireLLMKey,
+) -> list[VenueResponse]:
     """Rank open CFP venues for a research summary via Supabase pgvector."""
     matches = rank_venues(req.summary, limit=req.limit, horizon_days=req.horizon_days)
     return [

@@ -28,6 +28,7 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool
 
 from backend.auth import AuthUser, CurrentUser
+from backend.byok import RequireLLMKey
 from backend.services.draft_service import draft_paper_supabase
 from paperpilot import trace
 from paperpilot.draft import SECTIONS, DraftSection
@@ -74,7 +75,9 @@ def _section_payload(section: DraftSection) -> dict[str, Any]:
 
 @router.post("/draft", response_model=None)
 async def draft(
-    req: DraftRequest, user: AuthUser = CurrentUser
+    req: DraftRequest,
+    user: AuthUser = CurrentUser,
+    _: None = RequireLLMKey,
 ) -> EventSourceResponse:
     """Stream the paper draft section-by-section as Server-Sent Events.
 

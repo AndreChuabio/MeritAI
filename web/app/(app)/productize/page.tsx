@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type {
   Citation,
   DraftDone,
@@ -73,6 +73,18 @@ export default function ProductizePage() {
   const [summaryReady, setSummaryReady] = useState(false);
   const [ingestNotice, setIngestNotice] = useState<string | null>(null);
   const [ingestLoading, setIngestLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  // The repo URL that sessionId was ingested from. Plugin extraction only
+  // reuses sessionId's cached bundle when this still matches the current
+  // repoUrl -- otherwise a leftover session from a previously ingested repo
+  // could get passed to a plugin extraction for a different repo.
+  const [ingestedRepoUrl, setIngestedRepoUrl] = useState<string | null>(null);
+  // Set when ingest is refused with a 413 (bundle too large to run
+  // unconfirmed). Holds the backend's detail message; cleared once the user
+  // either confirms ("Run anyway") or changes the repo URL.
+  const [largeBundleNotice, setLargeBundleNotice] = useState<string | null>(
+    null,
+  );
 
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
@@ -115,28 +127,41 @@ export default function ProductizePage() {
     setDraftOrder((prev) => (prev.includes(name) ? prev : [...prev, name]));
   }, []);
 
-  const handleIngest = useCallback(async () => {
-    const url = repoUrl.trim();
-    if (!url) return;
-    setIngestLoading(true);
-    setIngestNotice(null);
-    try {
-      const result = await api.ingest(url);
-      setSummary({ ...EMPTY_SUMMARY, ...result.summary });
-      setSummaryReady(true);
-      if (result.notes) setIngestNotice(result.notes);
-    } catch {
-      // Ingest can fail when the server GitHub token is unconfigured. Surface a
-      // friendly note (no raw error) and let the user write the summary by hand.
-      setIngestNotice(
-        "We could not read that repo automatically right now. No problem, you can write the summary below and continue.",
-      );
-      setSummary((prev) => (summaryHasContent(prev) ? prev : EMPTY_SUMMARY));
-      setSummaryReady(true);
-    } finally {
-      setIngestLoading(false);
-    }
-  }, [repoUrl]);
+  const handleIngest = useCallback(
+    async (confirmLarge = false) => {
+      const url = repoUrl.trim();
+      if (!url) return;
+      setIngestLoading(true);
+      setIngestNotice(null);
+      setLargeBundleNotice(null);
+      try {
+        const result = await api.ingest(url, confirmLarge);
+        setSummary({ ...EMPTY_SUMMARY, ...result.summary });
+        setSummaryReady(true);
+        setSessionId(result.session_id ?? null);
+        setIngestedRepoUrl(result.session_id ? url : null);
+        if (result.notes) setIngestNotice(result.notes);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 413) {
+          // Oversized bundle on the user's own key: surface the cost and let
+          // them decide, rather than silently spending it or silently
+          // falling back to manual entry.
+          setLargeBundleNotice(err.message);
+          return;
+        }
+        // Ingest can fail when the server GitHub token is unconfigured. Surface a
+        // friendly note (no raw error) and let the user write the summary by hand.
+        setIngestNotice(
+          "We could not read that repo automatically right now. No problem, you can write the summary below and continue.",
+        );
+        setSummary((prev) => (summaryHasContent(prev) ? prev : EMPTY_SUMMARY));
+        setSummaryReady(true);
+      } finally {
+        setIngestLoading(false);
+      }
+    },
+    [repoUrl],
+  );
 
   const handleManualStart = useCallback(() => {
     setSummaryReady(true);
@@ -250,14 +275,15 @@ export default function ProductizePage() {
     setPluginLoading(true);
     setPluginError(null);
     try {
-      const result = await api.extractPlugin(url);
+      const reusableSessionId = ingestedRepoUrl === url ? sessionId : null;
+      const result = await api.extractPlugin(url, reusableSessionId);
       setPlugin(result);
     } catch (err) {
       setPluginError(errorMessage(err));
     } finally {
       setPluginLoading(false);
     }
-  }, [repoUrl]);
+  }, [repoUrl, sessionId, ingestedRepoUrl]);
 
   const downloadPlugin = useCallback(() => {
     if (!plugin) return;
@@ -324,7 +350,7 @@ export default function ProductizePage() {
               />
             </div>
             <Button
-              onClick={handleIngest}
+              onClick={() => handleIngest()}
               disabled={ingestLoading || repoUrl.trim().length === 0}
             >
               {ingestLoading ? <Spinner size={16} /> : null}
@@ -336,6 +362,21 @@ export default function ProductizePage() {
               </Button>
             ) : null}
           </div>
+          {largeBundleNotice ? (
+            <div className="flex flex-col gap-3 rounded-2xl bg-warning/10 px-4 py-3">
+              <p className="text-sm text-ink">{largeBundleNotice}</p>
+              <div>
+                <Button
+                  variant="secondary"
+                  onClick={() => handleIngest(true)}
+                  disabled={ingestLoading}
+                >
+                  {ingestLoading ? <Spinner size={16} /> : null}
+                  {ingestLoading ? "Ingesting" : "Run anyway"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {ingestNotice ? (
             <p className="rounded-2xl bg-warning/10 px-4 py-3 text-sm text-ink">
               {ingestNotice}

@@ -12,6 +12,7 @@ import type { EvidenceInput, EvidenceLedger } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { CriterionCard } from "./CriterionCard";
 import { CRITERIA_GUIDE, RECOMMENDED_FIRST } from "./types";
 import type {
@@ -363,6 +364,7 @@ export default function TrackPage() {
                 {downloadError}
               </p>
             ) : null}
+            <LegalDisclaimer />
           </section>
         </>
       )}
