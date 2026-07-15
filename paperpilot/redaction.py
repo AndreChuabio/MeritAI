@@ -1,9 +1,14 @@
 """Redaction of user-supplied secrets from anything that gets emitted.
 
 Merit takes no custody of user API keys, which means a key must never survive
-into a log line, a Datadog span, or a trace payload. This module is the single
-definition of what counts as sensitive, used by both the logging filter and
-paperpilot.trace's payload scrubber.
+into a log line or a trace payload. This module is the single definition of
+what counts as sensitive, used by both the logging filter and
+paperpilot.trace's payload scrubber. It covers log records and trace_log
+payloads only -- it does not cover APM instrumentation. If ddtrace is enabled
+for the API service (e.g. run under ddtrace-run), provider integrations such
+as ddtrace's OpenAI integration can tag request metadata (including partial
+key material) onto spans independently of this module, and that surface must
+be configured or scrubbed separately if and when ddtrace is turned on.
 
 Lives in paperpilot rather than backend because paperpilot.trace needs it and
 backend already depends on paperpilot -- the reverse would be circular.
