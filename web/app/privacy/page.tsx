@@ -82,8 +82,14 @@ export default function PrivacyPage() {
               <p className="text-muted">
                 The model providers Merit routes to via Vercel AI Gateway
                 (Google, Anthropic, OpenAI) receive the content you submit
-                for generation. Nobody else. Merit does not sell data and
-                has no advertisers.
+                for generation. If the optional outreach integrations are
+                enabled on your deployment, the outreach content you submit
+                is also sent to Senso (drafting) and Nimble (finding contacts
+                and looking up public scholar profile data). These
+                integrations are off unless the operator sets a Senso or
+                Nimble API key; on Merit's own hosted deployment, both are
+                configured. Merit does not sell your data and has no
+                advertisers.
               </p>
             </section>
 
