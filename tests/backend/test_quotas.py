@@ -28,7 +28,7 @@ from backend.auth import AuthUser, get_current_user
 from backend.main import app
 from backend.services import evidence_service
 from paperpilot import supabase_client, trace
-from paperpilot.outreach.evidence import USCIS_O1A_CRITERIA
+from paperpilot.outreach.evidence import USCIS_O1A_CRITERIA, EvidenceItem
 
 # ---------------------------------------------------------------------------
 # backend.quotas: Quota dataclass + enforce() (from the task brief)
@@ -283,6 +283,158 @@ def test_draft_criterion_narrative_emits_a_countable_evidence_draft_event(monkey
 
     like_pattern = f"{quotas.NARRATIVE.kind_prefix}%.end"
     assert fnmatch.fnmatch(f"evidence_draft.{criterion}.end", like_pattern.replace("%", "*"))
+
+
+# ---------------------------------------------------------------------------
+# Quota bypass via caller-supplied session_id.
+#
+# backend/routers/evidence.py forwards NarrativeRequest.session_id /
+# DossierRequest.session_id -- both Optional[str], caller-controlled -- into
+# these services. Before the fix, `sid = session_id or trace.new_session(
+# user_id)` only minted a user-bound session when session_id was empty. Any
+# NON-EMPTY caller-supplied session_id was never registered via
+# trace.new_session, so trace.log_event resolved no user binding for it and
+# wrote the row with a NULL user_id. user_event_count only counts rows with a
+# non-NULL user_id, so a client could send any non-empty session_id (e.g. a
+# constant string) and draft unlimited narratives/dossiers on Merit's own
+# API key forever. These tests drive the real (unmocked) service + trace.step
+# + user_event_count path with a non-empty caller session_id, mirroring what
+# a real client sends.
+# ---------------------------------------------------------------------------
+
+
+def test_draft_criterion_narrative_with_caller_session_id_is_still_countable(monkeypatch):
+    """A non-empty, caller-supplied session_id must not defeat the NARRATIVE
+    quota. This is the exact shape of the bypass: a client posts a body with
+    its own session_id instead of leaving it empty."""
+    user_id = "44444444-4444-4444-4444-444444444444"
+    criterion = USCIS_O1A_CRITERIA[0][0]
+    caller_session_id = "client-supplied-session-id"
+
+    monkeypatch.setattr(evidence_service.supabase_client, "get_conn", lambda: _FakeConn())
+    monkeypatch.setattr(
+        evidence_service, "list_evidence", lambda user_id, criterion=None, conn=None: []
+    )
+    monkeypatch.setattr(
+        evidence_service, "_find_user_profile_by_id", lambda user_id, conn=None: None
+    )
+    monkeypatch.setattr(evidence_service, "get_client", lambda: _FakeLLMClient())
+
+    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://stub")
+    captured: list[tuple[str, str | None, str, dict]] = []
+    monkeypatch.setattr(
+        trace,
+        "insert_trace",
+        lambda session_id, user_id, kind, payload: captured.append(
+            (session_id, user_id, kind, payload)
+        ),
+    )
+
+    narrative = evidence_service.draft_criterion_narrative(
+        user_id=user_id, criterion=criterion, session_id=caller_session_id
+    )
+
+    assert narrative
+
+    end_events = [c for c in captured if c[2] == f"evidence_draft.{criterion}.end"]
+    assert len(end_events) == 1, (
+        "draft_criterion_narrative must emit exactly one "
+        f"evidence_draft.{criterion}.end trace event; captured kinds were "
+        f"{[c[2] for c in captured]}"
+    )
+    event_session_id, event_user_id, _, _ = end_events[0]
+    assert event_session_id == caller_session_id, (
+        "the caller's session_id must be preserved on the emitted row for "
+        "correlation, not silently swapped for a different one"
+    )
+    assert event_user_id == user_id, (
+        "a non-empty caller-supplied session_id must still be bound to the "
+        "authenticated user_id -- otherwise the row is written with a NULL "
+        "user_id and user_event_count(user_id, 'evidence_draft', since) "
+        "never counts it, defeating the 30/month narrative quota"
+    )
+
+
+def test_build_dossier_with_caller_session_id_is_still_countable(monkeypatch):
+    """A non-empty, caller-supplied session_id must not defeat the DOSSIER
+    quota, and the internal per-criterion narrative calls threaded through
+    build_dossier must stay bound to the same user without double-minting a
+    second session id."""
+    user_id = "55555555-5555-5555-5555-555555555555"
+    caller_session_id = "client-supplied-dossier-session"
+    criterion = USCIS_O1A_CRITERIA[0][0]
+
+    item = EvidenceItem(
+        id="ev-1",
+        user_id=user_id,
+        criterion=criterion,
+        title="Award",
+        description="desc",
+        evidence_url="https://example.com",
+        evidence_date=None,
+        declared_at=datetime(2026, 1, 1),
+        status="ready",
+    )
+    grouped = {k: ([item] if k == criterion else []) for k, _ in USCIS_O1A_CRITERIA}
+
+    monkeypatch.setattr(evidence_service.supabase_client, "get_conn", lambda: _FakeConn())
+    monkeypatch.setattr(
+        evidence_service, "evidence_by_criterion", lambda user_id, conn=None: grouped
+    )
+    monkeypatch.setattr(
+        evidence_service, "count_satisfied_criteria", lambda user_id, conn=None: 1
+    )
+    monkeypatch.setattr(
+        evidence_service, "_find_user_profile_by_id", lambda user_id, conn=None: None
+    )
+    monkeypatch.setattr(
+        evidence_service, "list_evidence", lambda user_id, criterion=None, conn=None: [item]
+    )
+    monkeypatch.setattr(evidence_service, "get_client", lambda: _FakeLLMClient())
+
+    monkeypatch.setenv("SUPABASE_DB_URL", "postgresql://stub")
+    captured: list[tuple[str, str | None, str, dict]] = []
+    monkeypatch.setattr(
+        trace,
+        "insert_trace",
+        lambda session_id, user_id, kind, payload: captured.append(
+            (session_id, user_id, kind, payload)
+        ),
+    )
+
+    pdf_bytes = evidence_service.build_dossier(user_id, session_id=caller_session_id)
+
+    assert pdf_bytes
+
+    dossier_events = [c for c in captured if c[2] == "evidence_dossier.end"]
+    assert len(dossier_events) == 1
+    _, dossier_user_id, _, _ = dossier_events[0]
+    assert dossier_user_id == user_id, (
+        "evidence_dossier.end must carry the real user_id even when the "
+        "caller supplied a non-empty session_id, or the 3/month dossier "
+        "quota is defeated the same way as the narrative quota"
+    )
+
+    draft_events = [c for c in captured if c[2] == f"evidence_draft.{criterion}.end"]
+    assert len(draft_events) == 1, (
+        "build_dossier's internal _draft_all_narratives call must still "
+        f"emit the per-criterion narrative event; captured kinds were "
+        f"{[c[2] for c in captured]}"
+    )
+    _, draft_user_id, _, _ = draft_events[0]
+    assert draft_user_id == user_id, (
+        "the narrative call threaded internally by build_dossier must also "
+        "carry the real user_id, not NULL"
+    )
+
+    # No double-mint: every row emitted by this one build_dossier call must
+    # share the same session_id -- the sid computed once at the top of
+    # build_dossier, threaded through _draft_all_narratives.
+    session_ids = {c[0] for c in captured}
+    assert session_ids == {caller_session_id}, (
+        f"build_dossier must thread a single bound session id throughout, "
+        f"not mint a second one; saw session ids {session_ids}"
+    )
 
 
 # ---------------------------------------------------------------------------

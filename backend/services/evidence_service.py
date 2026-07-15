@@ -436,13 +436,22 @@ def draft_criterion_narrative(
     user_prompt = draft_mod._build_user_prompt(criterion, items, profile)
     model = DEFAULTS["draft"]
     # trace.log_event resolves trace_log.user_id from the _SESSION_USER
-    # registry, which only trace.new_session() populates. The real Track UI
-    # client (web/lib/api.ts evidence.narrative) posts no body, so this
-    # endpoint always receives session_id=None -- a plain fallback string
-    # here would never be registered and the row would carry a NULL
-    # user_id, making backend.quotas.NARRATIVE's user_event_count() always
-    # return 0. Mint a real bound session instead, same fix as build_dossier.
-    sid = session_id or trace.new_session(user_id)
+    # registry, which only trace.new_session() / trace.bind_session()
+    # populate. session_id here is caller-supplied (NarrativeRequest.
+    # session_id) and must never be trusted to already be bound: a client
+    # that sends session_id=None gets a fresh minted session, but a client
+    # that sends ANY non-empty session_id previously fell straight through
+    # `session_id or trace.new_session(user_id)` unregistered, so the
+    # emitted row carried a NULL user_id and backend.quotas.NARRATIVE's
+    # user_event_count() never counted it -- an unlimited-narrative quota
+    # bypass. Binding the supplied id to THIS user is safe: the row still
+    # carries the real caller's user_id no matter what string they send, so
+    # quota counting cannot be defeated by client cooperation (or the lack
+    # of it). This does not grant access to another user's session_id --
+    # ownership of another tenant's session is a separate, narrower guard
+    # (see plugin_service._check_session_ownership) that does not apply to
+    # this Merit-key-billed surface.
+    sid = trace.bind_session(session_id, user_id) if session_id else trace.new_session(user_id)
 
     with trace.step(
         sid,
@@ -556,11 +565,19 @@ def build_dossier(user_id: str, session_id: Optional[str] = None) -> bytes:
 
     The build is wrapped in a trace.step so it emits an "evidence_dossier.end"
     event on success -- this is what backend.quotas.DOSSIER counts against.
-    Without it, a build_dossier call left no row a quota could ever match. If
-    no session_id is supplied, one is minted with trace.new_session(user_id)
-    so the trace_log row is bound to the real caller instead of being
-    written with a NULL user_id (a session id that was never registered via
-    trace.new_session resolves to no user binding at log time).
+    Without it, a build_dossier call left no row a quota could ever match.
+
+    session_id is caller-supplied (DossierRequest.session_id) and must never
+    be trusted to already be bound to a user: when empty, a fresh session is
+    minted with trace.new_session(user_id); when non-empty, it is bound to
+    THIS user with trace.bind_session so the emitted row still carries the
+    real caller's user_id no matter what string the client sends (a session
+    id that was never registered resolves to no user binding at log time,
+    which is exactly how a non-empty caller session_id used to bypass the
+    3/month dossier quota indefinitely). The resulting sid is computed once
+    here and threaded into _draft_all_narratives so the internal per-
+    criterion draft_criterion_narrative calls reuse the same bound session
+    instead of minting a second one.
 
     Returns the PDF bytes. Raises RuntimeError if narrative drafting or PDF
     rendering fails; no partial / empty bytes are returned.
@@ -568,7 +585,7 @@ def build_dossier(user_id: str, session_id: Optional[str] = None) -> bytes:
     if not user_id:
         raise ValueError("user_id is required")
 
-    sid = session_id or trace.new_session(user_id)
+    sid = trace.bind_session(session_id, user_id) if session_id else trace.new_session(user_id)
 
     with trace.step(sid, "evidence_dossier", user_id=user_id) as ctx:
         conn = supabase_client.get_conn()

@@ -82,6 +82,25 @@ def session_user(session_id: str) -> str:
     return _SESSION_USER.get(session_id, "")
 
 
+def bind_session(session_id: str, user_id: str) -> str:
+    """Bind an existing session_id to user_id and return it unchanged.
+
+    Use this when a caller supplies its own session_id (rather than one
+    minted by new_session) and that id must still resolve to a user for
+    log_event/user_event_count purposes -- e.g. a Merit-key-billed surface
+    that must not let a non-empty caller-supplied session_id bypass
+    user-binding (and therefore quota counting) the way an unregistered
+    session_id silently would. Idempotent: binding the same session_id to
+    the same user_id twice is a no-op, so callers that thread one sid
+    through several steps (e.g. build_dossier -> draft_criterion_narrative)
+    can safely call this more than once without minting a second session.
+    """
+    if not user_id:
+        raise ValueError("user_id is required to bind a session")
+    _SESSION_USER[session_id] = user_id
+    return session_id
+
+
 def log_event(session_id: str, kind: str, payload: dict[str, Any]) -> None:
     """Record one agent step. Best-effort writes to Supabase; never raises.
 
