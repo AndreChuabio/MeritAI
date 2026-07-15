@@ -1,6 +1,6 @@
 """Passcode-style auth shim for Merit.
 
-Two real users (Andre and Nikki) plus a dev fallback. Designed as a temporary
+Example users (Ada Lovelace and Alan Turing) plus a dev fallback. Designed as a temporary
 shim that can be swapped for a real provider (Clerk on Vercel Marketplace was
 the leading candidate at audit time) without changing call sites.
 
@@ -12,8 +12,8 @@ Contract used by every Streamlit page:
 
 Configuration:
     PAPERPILOT_USERS_JSON -- JSON list of users. Schema:
-        [{"user_id": "andre", "name": "Andre", "passcode": "..."},
-         {"user_id": "nikki", "name": "Nikki", "passcode": "..."}]
+        [{"user_id": "user1", "name": "Ada Lovelace", "passcode": "..."},
+         {"user_id": "user2", "name": "Alan Turing", "passcode": "..."}]
 
 If the env var is unset, empty, or invalid JSON, the module fails closed and
 grants access to nobody. Set ALLOW_DEV_AUTH=1 to opt back into a single

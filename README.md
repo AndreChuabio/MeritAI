@@ -101,7 +101,7 @@ Every LLM call wrapped by `trace.step(...)` → in-process buffer (UI right rail
 | Long-context ingest | Gemini 2.5 Flash, 1M-ctx | **DeepMind** |
 | Drafting | Claude Sonnet 4.6, streamed | **Anthropic** |
 | Vector search + audit + artifacts + evidence | ClickHouse Cloud -- 7 tables: `cfp`, `arxiv`, `trace_log`, `session_artifacts`, `user_profile`, `outreach_log`, `o1_evidence` | **ClickHouse** |
-| Multi-user auth | passcode shim (`paperpilot/auth.py`); two users (Andre + Nikki) from `PAPERPILOT_USERS_JSON` env var; swap-in target is Clerk | (post-hack) |
+| Multi-user auth | passcode shim (`paperpilot/auth.py`); example users from `PAPERPILOT_USERS_JSON` env var; swap-in target is Clerk | (post-hack) |
 | PDF dossier export | `reportlab` -- cover + summary + per-criterion sections with drafted narratives | (post-hack) |
 | Citation trajectory chart | `plotly` -- cumulative `by_year` parsed from live Scholar HTML | (post-hack) |
 | Live web data | `/v1/search` + `/v1/search?include_answer` + `/v1/extract` | **Nimble** |
@@ -157,7 +157,7 @@ Merit was multi-tenant-hardened post-hackathon. Every Streamlit page is gated by
 Configure users via the `PAPERPILOT_USERS_JSON` env var:
 
 ```bash
-PAPERPILOT_USERS_JSON='[{"user_id":"andre","name":"Andre","passcode":"..."},{"user_id":"nikki","name":"Nikki","passcode":"..."}]'
+PAPERPILOT_USERS_JSON='[{"user_id":"user1","name":"Ada Lovelace","passcode":"..."},{"user_id":"user2","name":"Alan Turing","passcode":"..."}]'
 ```
 
 If the env var is unset, empty, or invalid JSON, the module fails closed and grants access to nobody, surfacing an `st.error` on the login screen. Set `ALLOW_DEV_AUTH=1` to opt back into a single built-in dev user (`dev` / `dev`) for local development; an `st.warning` marks the degraded state.

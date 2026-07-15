@@ -128,11 +128,11 @@ with tab_brand:
     c1, c2 = st.columns(2)
     github_url   = c1.text_input(
         "GitHub",
-        value=st.session_state.get("brand_github", "http://github.com/huhu42"),
+        value=st.session_state.get("brand_github", "https://github.com/username"),
     )
     linkedin_url = c2.text_input(
         "LinkedIn",
-        value=st.session_state.get("brand_linkedin", "https://www.linkedin.com/in/nikkihu/"),
+        value=st.session_state.get("brand_linkedin", "https://www.linkedin.com/in/username/"),
     )
     c3, c4 = st.columns(2)
     scholar_url  = c3.text_input("Google Scholar", value=st.session_state.get("brand_scholar", ""))
