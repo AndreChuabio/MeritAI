@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.auth import AuthUser, CurrentUser
+from backend.byok import RequireLLMKey
 from backend.services import market_service
 
 router = APIRouter(prefix="/market", tags=["market"])
@@ -89,10 +90,15 @@ class PersonOut(BaseModel):
 
 
 class PeopleResponse(BaseModel):
-    """People suggestions plus whether the discovery source is configured."""
+    """People suggestions plus whether the discovery source is configured.
+
+    reason is populated when configured is False, explaining that contact
+    discovery is an optional integration rather than a broken feature.
+    """
 
     configured: bool
     people: list[PersonOut]
+    reason: str = ""
 
 
 class PeopleRequest(BaseModel):
@@ -145,7 +151,9 @@ def put_profile(
 
 @router.post("/outreach/generate", response_model=list[DraftCardOut])
 def generate_outreach(
-    body: OutreachGenerateRequest, user: AuthUser = CurrentUser
+    body: OutreachGenerateRequest,
+    user: AuthUser = CurrentUser,
+    _: None = RequireLLMKey,
 ) -> list[DraftCardOut]:
     """Generate draft cards for a purpose and log each event for the caller."""
     try:
@@ -179,6 +187,7 @@ def suggest_people(
     return PeopleResponse(
         configured=result["configured"],
         people=[PersonOut(**p) for p in result["people"]],
+        reason=result.get("reason", ""),
     )
 
 

@@ -58,10 +58,11 @@ precompute:
 meta:
 	uv run python scripts/meta_flex.py
 
-# Push to a new public GitHub repo (hackathon -> Devpost needs public).
+# Push to an existing GitHub repo. Repo creation and visibility are
+# deliberate manual steps, not something make push should do.
 push:
-	gh repo create AndreChuabio/agentichack --public --source=. --push \
-	  --description "Drop a GitHub repo. Get a research paper draft. Built at NYC Agentic Engineering Hack 2026 at Datadog HQ."
+	@echo "Repo creation is a deliberate manual step. Use: gh repo create <owner>/<name> --<public|private>"
+	@echo "To push commits to an existing remote, use: git push"
 
 # Push .env values into the linked Railway service. Run after `railway link`.
 railway-env:
@@ -87,7 +88,7 @@ seed-senso:
 # Print the outreach demo rehearsal script.
 outreach-demo:
 	@echo "Outreach demo rehearsal:"
-	@echo "  1. Brand tab: confirm pre-synced brand kit for 'Nikki' loads."
+	@echo "  1. Brand tab: confirm pre-synced brand kit loads."
 	@echo "  2. Outreach tab: pick VISA, type 'apply to keynote at ML4H 2026', Generate."
 	@echo "  3. Track tab: confirm score, Scholar climbs to 14/20, drafts list shows."
 	@echo ""

@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from paperpilot import nimble_client, supabase_client, trace
-from paperpilot.outreach.orchestrator import DraftCard, generate_drafts
+from paperpilot.outreach.orchestrator import generate_drafts
 from paperpilot.outreach.purpose import Purpose
 from paperpilot.outreach.senso import Senso
 
@@ -201,13 +201,23 @@ def suggest_people(
 ) -> dict[str, Any]:
     """Suggest people/orgs to reach via Nimble web search.
 
-    Returns {"configured": bool, "people": [{name, detail, url, email}]}. When
-    Nimble is unconfigured, returns configured=False with an empty list so the
-    UI can explain why instead of erroring. Emails are best-effort extracted
-    from result snippets; many results will have none.
+    Returns {"configured": bool, "people": [...], "reason": str}. Nimble is an
+    optional accelerant, not a precondition: when it is unconfigured this
+    returns configured=False with an empty list and a "reason" explaining
+    that contact discovery is optional so the UI can present it as such
+    rather than as a broken feature. Emails are best-effort extracted from
+    result snippets; many results will have none.
     """
     if not nimble_client.is_configured():
-        return {"configured": False, "people": []}
+        return {
+            "configured": False,
+            "people": [],
+            "reason": (
+                "Contact discovery is an optional integration and is not "
+                "configured. Enter the recipient's name and contact yourself "
+                "to continue -- drafting works without it."
+            ),
+        }
     qualifier = _PEOPLE_QUERY.get(
         purpose.upper(), "people and organizations working on"
     )
@@ -225,7 +235,7 @@ def suggest_people(
                 "email": emails[0] if emails else "",
             }
         )
-    return {"configured": True, "people": people}
+    return {"configured": True, "people": people, "reason": ""}
 
 
 def list_outreach_log(
@@ -271,29 +281,19 @@ def generate_outreach(
 
     Reuses paperpilot.outreach.orchestrator.generate_drafts for all LLM and
     Senso work; this layer only supplies a Supabase-backed logger and opens a
-    session. Senso may be unconfigured: if SENSO_API_KEY is missing we return
-    one error card per nothing-generated rather than raising, so the UI can
-    surface a clear message.
+    session. Senso is optional: when configured it is used for its brand-kit
+    tone retrieval, otherwise drafting runs on a direct LLM call.
     """
     try:
         purpose_enum = Purpose(purpose)
     except ValueError as exc:
         raise ValueError(f"Unknown purpose: {purpose!r}") from exc
 
-    if not os.environ.get("SENSO_API_KEY"):
-        return [
-            asdict(
-                DraftCard(
-                    channel="",
-                    content_type_id="",
-                    sample_job_id="",
-                    markdown="",
-                    error="Senso is not configured (SENSO_API_KEY missing).",
-                )
-            )
-        ]
+    # Senso is an optional enhancement, not a precondition. Without a key we
+    # draft with a direct LLM call on the caller's own key, which is the path
+    # every self-hosted user takes.
+    senso = Senso.from_env() if os.environ.get("SENSO_API_KEY") else None
 
-    senso = Senso.from_env()
     session_id = trace.new_session(user_id)
     conn = supabase_client.get_conn()
     try:

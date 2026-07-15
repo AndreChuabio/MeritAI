@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
+import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { ItemForm } from "./ItemForm";
 import { CRITERIA_GUIDE } from "./types";
 import type {
@@ -330,6 +331,7 @@ export function CriterionCard({
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
                 {narrative}
               </p>
+              <LegalDisclaimer className="mt-3" />
             </div>
           ) : null}
         </div>

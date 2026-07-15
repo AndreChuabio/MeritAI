@@ -1,7 +1,8 @@
 """Claude Code plugin extraction.
 
-A single Gateway LLM call inspects the same `RepoBundle` we already fetched
-for paper summarization, and returns a structured `PluginPack` describing a
+A single Gateway LLM call inspects the same rendered repo bundle we already
+fetched (and, on a Productize run, already sent once) for paper
+summarization, and returns a structured `PluginPack` describing a
 publishable Claude Code plugin: skills, slash commands, subagents, hooks,
 and MCP server suggestions.
 
@@ -21,7 +22,6 @@ from pydantic import BaseModel, Field
 
 from paperpilot import trace
 from paperpilot.gateway import DEFAULTS, get_client
-from paperpilot.github_ingest import RepoBundle, render_bundle
 
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
@@ -182,17 +182,30 @@ class PluginPack(BaseModel):
         )
 
 
-def extract_plugin(bundle: RepoBundle, session_id: str) -> PluginPack:
-    """Single LLM call -> structured PluginPack. Traced through trace.step."""
-    rendered = render_bundle(bundle)
+def extract_plugin(
+    rendered: str,
+    session_id: str,
+    repo_label: str = "",
+    file_count: int = 0,
+    total_tokens: int = 0,
+) -> PluginPack:
+    """Single LLM call -> structured PluginPack. Traced through trace.step.
+
+    Takes the already-rendered bundle text rather than a RepoBundle so the
+    caller can pass either a freshly fetched-and-rendered bundle or one
+    reused from a prior /ingest run for the same session, without this
+    function caring which. repo_label/file_count/total_tokens are optional
+    tracing metadata only -- when the bundle was reused, the caller may not
+    have them and 0/"" is fine.
+    """
     model = DEFAULTS["ingest"]  # Reuse Gemini -- long context, cheap, good at structured extraction.
 
     with trace.step(
         session_id,
         "skill.extract",
-        repo=f"{bundle.owner}/{bundle.name}",
-        files=bundle.file_count,
-        repo_tokens=bundle.total_tokens,
+        repo=repo_label,
+        files=file_count,
+        repo_tokens=total_tokens,
         model=model,
     ) as ctx:
         client = get_client()

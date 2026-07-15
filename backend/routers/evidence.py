@@ -23,6 +23,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
+from backend import quotas
 from backend.auth import AuthUser, CurrentUser
 from backend.services import evidence_service
 from paperpilot.outreach.evidence import USCIS_O1A_CRITERIA, EvidenceItem
@@ -210,6 +211,7 @@ def draft_narrative(
     user: AuthUser = CurrentUser,
 ) -> NarrativeResponse:
     """Draft a petition-quality narrative for one O-1A criterion."""
+    quotas.enforce(user.id, quotas.NARRATIVE)
     session_id = req.session_id if req else None
     try:
         narrative = evidence_service.draft_criterion_narrative(
@@ -232,6 +234,7 @@ def build_dossier(
     req: DossierRequest | None = None, user: AuthUser = CurrentUser
 ) -> Response:
     """Build the O-1A evidence dossier PDF and return it as application/pdf."""
+    quotas.enforce(user.id, quotas.DOSSIER)
     session_id = req.session_id if req else None
     try:
         pdf_bytes = evidence_service.build_dossier(user.id, session_id=session_id)

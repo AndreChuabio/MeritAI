@@ -1,16 +1,45 @@
 # Merit
 
-Three agentic surfaces on one stack: turn your GitHub repo into a research paper, draft your personal-brand outreach for it, and track your O-1 / National Interest Waiver visa progress against the USCIS criteria. Every LLM call traced.
+Merit turns a GitHub repo into a research paper draft, drafts personal-brand outreach copy for the person behind it, and tracks an O-1A extraordinary-ability visa petition against the 8 USCIS criteria -- three agentic surfaces on one stack, every LLM call traced.
 
-Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ. Live at **https://paperpilot-production-97dc.up.railway.app**.
+## The one key you need
 
-**Post-hackathon (2026-05-24):** hardened for two real users (Andre + Nikki) with passcode auth, per-user data isolation across ClickHouse, an O-1A Evidence Ledger that replaces the heuristic gauge with declared evidence against the 8 USCIS criteria, per-criterion narrative drafting, and a reportlab-rendered PDF dossier for attorney handoff. Productize + Market kept their hackathon shapes; Track was rebuilt around real petition workflow.
+Merit calls three model providers: Google for repo ingest, Anthropic for drafting, and OpenAI for embeddings. No single provider key can run the pipeline. One **Vercel AI Gateway** key routes to all three.
+
+Get one free at https://vercel.com/dashboard/ai-gateway.
+
+Senso (brand-kit tone retrieval) and Nimble (contact discovery) are optional enhancements layered on top. Nothing breaks without them -- Merit falls back to a direct LLM call and hides the affected UI elements when their keys are unset.
+
+## Run it
+
+```bash
+git clone https://github.com/AndreChuabio/MeritAI.git
+cd MeritAI
+cp .env.example .env
+# Put your AI_GATEWAY_API_KEY in .env. That is the only required key.
+uv sync
+make test
+
+# FastAPI backend + Next.js web app (the primary, modern surface):
+make api                              # backend on :8000
+cd web && npm install && npm run dev  # frontend on :3000, needs web/.env.example filled in
+```
+
+The backend also needs Supabase configured (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, etc. in `.env`) for auth and persistence -- see `.env.example`. The original hackathon-era Streamlit app (`make dev`) still runs and is documented under "Quickstart" below; it is a separate, legacy surface that additionally needs ClickHouse.
+
+## What this is not
+
+Merit is a document-preparation tool. It drafts research papers, outreach messages, and O-1A petition narratives for a human to review, edit, and use -- it is not a law firm, it does not practice law, and nothing it generates is legal advice. See the in-app disclaimers and the privacy policy (`web/app/privacy`) for what is stored and who submitted content is shared with.
+
+---
+
+Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ. Hardened after the hackathon for multi-tenant use: passcode/Supabase auth, per-user data isolation, bring-your-own-key billing (Merit never stores or logs a caller's API key), an O-1A Evidence Ledger that replaces the heuristic gauge with declared evidence against the 8 USCIS criteria, per-criterion narrative drafting, and a reportlab-rendered PDF dossier for attorney handoff.
 
 ---
 
 ## What it does
 
-A three-page Streamlit app (`Productize.py` entry + `pages/Market.py` + `pages/Track.py`) on a shared agentic spine.
+The section below describes the original three-page Streamlit app (`Productize.py` entry + `pages/Market.py` + `pages/Track.py`), which the post-hackathon `backend/` (FastAPI) + `web/` (Next.js) rebuild carries forward on the same agentic spine with BYOK auth and Supabase persistence. The underlying pipeline logic (`paperpilot/`) is shared by both surfaces.
 
 ### Productize -- repo to paper draft for a matched venue
 
@@ -72,7 +101,7 @@ Every LLM call wrapped by `trace.step(...)` → in-process buffer (UI right rail
 | Long-context ingest | Gemini 2.5 Flash, 1M-ctx | **DeepMind** |
 | Drafting | Claude Sonnet 4.6, streamed | **Anthropic** |
 | Vector search + audit + artifacts + evidence | ClickHouse Cloud -- 7 tables: `cfp`, `arxiv`, `trace_log`, `session_artifacts`, `user_profile`, `outreach_log`, `o1_evidence` | **ClickHouse** |
-| Multi-user auth | passcode shim (`paperpilot/auth.py`); two users (Andre + Nikki) from `PAPERPILOT_USERS_JSON` env var; swap-in target is Clerk | (post-hack) |
+| Multi-user auth | passcode shim (`paperpilot/auth.py`); example users from `PAPERPILOT_USERS_JSON` env var; swap-in target is Clerk | (post-hack) |
 | PDF dossier export | `reportlab` -- cover + summary + per-criterion sections with drafted narratives | (post-hack) |
 | Citation trajectory chart | `plotly` -- cumulative `by_year` parsed from live Scholar HTML | (post-hack) |
 | Live web data | `/v1/search` + `/v1/search?include_answer` + `/v1/extract` | **Nimble** |
@@ -128,10 +157,10 @@ Merit was multi-tenant-hardened post-hackathon. Every Streamlit page is gated by
 Configure users via the `PAPERPILOT_USERS_JSON` env var:
 
 ```bash
-PAPERPILOT_USERS_JSON='[{"user_id":"andre","name":"Andre","passcode":"..."},{"user_id":"nikki","name":"Nikki","passcode":"..."}]'
+PAPERPILOT_USERS_JSON='[{"user_id":"user1","name":"Ada Lovelace","passcode":"..."},{"user_id":"user2","name":"Alan Turing","passcode":"..."}]'
 ```
 
-If the env var is unset, empty, or invalid JSON, the module falls back to a single dev user (`dev` / `dev`) and surfaces an `st.warning` so the degradation is obvious in production.
+If the env var is unset, empty, or invalid JSON, the module fails closed and grants access to nobody, surfacing an `st.error` on the login screen. Set `ALLOW_DEV_AUTH=1` to opt back into a single built-in dev user (`dev` / `dev`) for local development; an `st.warning` marks the degraded state.
 
 `user_id` threads through every write: `trace.new_session(user_id)`, `pipeline.save_artifact(user_id, ...)`, `clickhouse_client.fetch_artifacts(user_id, ...)`, `outreach.orchestrator.generate_drafts(..., user_id=...)`, and the O-1A evidence ledger. The past-sessions panel on Productize, the outreach drafts on Market, and the evidence ledger on Track are all scoped to the signed-in user.
 
@@ -164,6 +193,8 @@ The runner reads every `.sql` file in lexicographic order, strips SQL comments, 
 ---
 
 ## Quickstart
+
+This section covers the legacy Streamlit surface (`make dev`). For the primary FastAPI + Next.js surface, see "Run it" at the top of this file -- it needs only `AI_GATEWAY_API_KEY` plus Supabase, not ClickHouse.
 
 ```bash
 # 0. Prereqs: macOS, uv, brew, gh CLI.

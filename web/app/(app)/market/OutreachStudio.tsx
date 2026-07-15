@@ -13,6 +13,7 @@ import {
   Spinner,
   Textarea,
 } from "@/components/ui";
+import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 
 /**
  * Outreach purposes accepted by the backend (OutreachGenerateRequest.purpose).
@@ -148,6 +149,7 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
   const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [peopleConfigured, setPeopleConfigured] = useState(true);
+  const [peopleReason, setPeopleReason] = useState("");
   const [searchedPeople, setSearchedPeople] = useState(false);
 
   const [log, setLog] = useState<OutreachLogView[]>([]);
@@ -202,6 +204,7 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
     try {
       const res = await api.market.suggestPeople(purpose, context);
       setPeopleConfigured(res.configured);
+      setPeopleReason(res.reason ?? "");
       setPeople(res.people ?? []);
     } catch (err: unknown) {
       setPeopleError(
@@ -424,9 +427,11 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
             {peopleError ? (
               <p className="text-sm text-danger">{peopleError}</p>
             ) : !peopleConfigured ? (
-              <p className="text-sm text-muted">
-                People search is not set up. Enter a recipient manually above.
-              </p>
+              <div className="rounded-2xl bg-primary-50 px-4 py-3 text-sm text-ink">
+                <span className="font-medium">Contact discovery is optional.</span>{" "}
+                {peopleReason ||
+                  "Enter the recipient's name and contact yourself above -- drafting works without it."}
+              </div>
             ) : peopleLoading ? null : people.length === 0 ? (
               <p className="text-sm text-muted">
                 No leads found. Try broader context, or enter a recipient
@@ -497,71 +502,74 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
       </Card>
 
       {cards.length > 0 ? (
-        <div className="grid gap-5 lg:grid-cols-2">
-          {cards.map((card, index) => {
-            const key = card.draftId || `${card.channel}-${index}`;
-            const body = bodyFor(card, key);
-            return (
-              <Card key={key} interactive>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="primary">{card.channel || "Draft"}</Badge>
-                    {card.contentTypeId ? (
-                      <Badge tone="neutral">{card.contentTypeId}</Badge>
-                    ) : null}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void copyCard(key, body)}
-                    disabled={!body}
-                  >
-                    {copiedId === key ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                {card.error ? (
-                  <p className="text-sm text-danger">{card.error}</p>
-                ) : (
-                  <>
-                    <Textarea
-                      name={`draft-${key}`}
-                      label="Edit before sending"
-                      className="min-h-56 font-sans text-sm leading-relaxed"
-                      value={body}
-                      onChange={(e) =>
-                        setEdited((prev) => ({ ...prev, [key]: e.target.value }))
-                      }
-                    />
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void handleSend(card, key)}
-                        disabled={!emailReady || !body.trim()}
-                      >
-                        Open in email
-                      </Button>
-                      {!toEmail.trim() ? (
-                        <span className="text-xs text-muted">
-                          Add a recipient email above to send.
-                        </span>
-                      ) : !emailReady ? (
-                        <span className="text-xs text-muted">
-                          That email does not look valid yet.
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted">
-                          Opens your mail app to {toEmail}. You review and
-                          send it yourself.
-                        </span>
-                      )}
+        <div className="flex flex-col gap-4">
+          <LegalDisclaimer />
+          <div className="grid gap-5 lg:grid-cols-2">
+            {cards.map((card, index) => {
+              const key = card.draftId || `${card.channel}-${index}`;
+              const body = bodyFor(card, key);
+              return (
+                <Card key={key} interactive>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="primary">{card.channel || "Draft"}</Badge>
+                      {card.contentTypeId ? (
+                        <Badge tone="neutral">{card.contentTypeId}</Badge>
+                      ) : null}
                     </div>
-                  </>
-                )}
-              </Card>
-            );
-          })}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void copyCard(key, body)}
+                      disabled={!body}
+                    >
+                      {copiedId === key ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                  {card.error ? (
+                    <p className="text-sm text-danger">{card.error}</p>
+                  ) : (
+                    <>
+                      <Textarea
+                        name={`draft-${key}`}
+                        label="Edit before sending"
+                        className="min-h-56 font-sans text-sm leading-relaxed"
+                        value={body}
+                        onChange={(e) =>
+                          setEdited((prev) => ({ ...prev, [key]: e.target.value }))
+                        }
+                      />
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void handleSend(card, key)}
+                          disabled={!emailReady || !body.trim()}
+                        >
+                          Open in email
+                        </Button>
+                        {!toEmail.trim() ? (
+                          <span className="text-xs text-muted">
+                            Add a recipient email above to send.
+                          </span>
+                        ) : !emailReady ? (
+                          <span className="text-xs text-muted">
+                            That email does not look valid yet.
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted">
+                            Opens your mail app to {toEmail}. You review and
+                            send it yourself.
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
         </div>
       ) : hasGenerated && !genError ? (
         <Card>

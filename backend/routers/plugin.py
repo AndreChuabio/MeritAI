@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from backend.auth import AuthUser, CurrentUser
+from backend.byok import RequireLLMKey
 from backend.services.plugin_service import extract_plugin_from_repo
 
 router = APIRouter(tags=["plugin"])
@@ -22,6 +23,10 @@ class ExtractPluginRequest(BaseModel):
     """Request body for plugin extraction."""
 
     repo_url: str
+    # session_id from a prior /ingest call on this repo, if any. When given,
+    # the repo bundle that ingest already fetched and rendered is reused
+    # instead of fetched again. Omit for a plugin-only run.
+    session_id: str | None = None
 
 
 class ExtractPluginResponse(BaseModel):
@@ -34,7 +39,9 @@ class ExtractPluginResponse(BaseModel):
 
 @router.post("/extract-plugin", response_model=ExtractPluginResponse)
 def extract_plugin_endpoint(
-    req: ExtractPluginRequest, user: AuthUser = CurrentUser
+    req: ExtractPluginRequest,
+    user: AuthUser = CurrentUser,
+    _: None = RequireLLMKey,
 ) -> ExtractPluginResponse:
     """Extract a Claude Code plugin from a GitHub repo and return it zipped.
 
@@ -50,11 +57,16 @@ def extract_plugin_endpoint(
         )
 
     try:
-        result = extract_plugin_from_repo(repo_url, user.id)
+        result = extract_plugin_from_repo(repo_url, user.id, session_id=req.session_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
+    except HTTPException:
+        # Raised deliberately by extract_plugin_from_repo (e.g. the 403 from
+        # _check_session_ownership) -- let it through as-is instead of
+        # masking it as a generic 502 below.
+        raise
     except Exception as exc:  # noqa: BLE001 -- surface pipeline errors as 502
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

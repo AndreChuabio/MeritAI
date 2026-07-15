@@ -129,16 +129,25 @@ def insert_trace(
 
 
 def fetch_traces(
-    session_id: str, conn: psycopg.Connection | None = None
+    session_id: str, user_id: str, conn: psycopg.Connection | None = None
 ) -> list[dict[str, Any]]:
-    """Return all trace events for a session in chronological order."""
+    """Return all trace events for a session in chronological order.
+
+    user_id is required and scopes the read. session_id alone is not a
+    secret -- it is echoed to the client and threaded through requests, so a
+    caller who guessed or replayed another tenant's session_id must not be
+    able to read that tenant's trace events (which can include cost_usd and
+    prompt/criterion metadata) through the service-role connection.
+    """
+    if not user_id:
+        raise ValueError("user_id is required")
     owns = conn is None
     conn = conn or get_conn()
     try:
         rows = conn.execute(
             "SELECT ts, kind, payload FROM trace_log "
-            "WHERE session_id = %s ORDER BY ts",
-            (session_id,),
+            "WHERE session_id = %s AND user_id = %s ORDER BY ts",
+            (session_id, user_id),
         ).fetchall()
     finally:
         if owns:
@@ -247,22 +256,68 @@ def fetch_artifacts(
 def fetch_artifact_content(
     session_id: str,
     artifact_name: str,
+    user_id: str,
     conn: psycopg.Connection | None = None,
 ) -> str | None:
-    """Pull the raw content blob for one specific artifact (newest match)."""
+    """Pull the raw content blob for one specific artifact (newest match).
+
+    user_id is required and always scopes the lookup to that caller. The
+    backend connects as the service role and bypasses RLS, so this filter is
+    the only guard against one tenant reading another tenant's cached
+    artifact by guessing or replaying a session id -- it used to be an
+    optional parameter that, when omitted, silently dropped the filter
+    entirely. Making it required means a caller who forgets it gets a
+    TypeError at call time instead of a cross-tenant read at runtime.
+    """
     owns = conn is None
     conn = conn or get_conn()
+    where = ["session_id = %s", "artifact_name = %s", "user_id = %s"]
+    params: list[Any] = [session_id, artifact_name, user_id]
+    sql = (
+        "SELECT content FROM session_artifacts "
+        "WHERE " + " AND ".join(where) + " ORDER BY ts DESC LIMIT 1"
+    )
     try:
-        row = conn.execute(
-            "SELECT content FROM session_artifacts "
-            "WHERE session_id = %s AND artifact_name = %s "
-            "ORDER BY ts DESC LIMIT 1",
-            (session_id, artifact_name),
-        ).fetchone()
+        row = conn.execute(sql, params).fetchone()
     finally:
         if owns:
             conn.close()
     return row[0] if row else None
+
+
+def session_owner(
+    session_id: str, conn: psycopg.Connection | None = None
+) -> str | None:
+    """Return the user_id already associated with a session, or None.
+
+    Checks session_artifacts, then trace_log, for the first row recording a
+    non-null user_id under this session_id. Used to guard against a
+    caller-supplied session_id (e.g. POST /extract-plugin's optional
+    session_id, meant to reuse a prior /ingest bundle) being reused to write
+    rows into another tenant's session namespace. An unknown session_id
+    returns None -- a fresh session, not a violation.
+    """
+    owns = conn is None
+    conn = conn or get_conn()
+    try:
+        row = conn.execute(
+            "SELECT user_id FROM session_artifacts "
+            "WHERE session_id = %s AND user_id IS NOT NULL LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row and row[0]:
+            return row[0]
+        row = conn.execute(
+            "SELECT user_id FROM trace_log "
+            "WHERE session_id = %s AND user_id IS NOT NULL LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if row and row[0]:
+            return row[0]
+        return None
+    finally:
+        if owns:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -422,3 +477,58 @@ def upsert_arxiv(
         if owns:
             conn.close()
     return n
+
+
+# ---------------------------------------------------------------------------
+# Cost and quota queries over trace_log
+# ---------------------------------------------------------------------------
+
+def user_cost_usd(
+    user_id: str,
+    since: datetime | None = None,
+    conn: psycopg.Connection | None = None,
+) -> float:
+    """Total LLM spend attributed to one user, in USD.
+
+    Reads cost_usd out of the trace_log payload written by paperpilot.trace.
+    Events with no cost_usd (start events, non-LLM steps) contribute zero.
+    """
+    owns = conn is None
+    conn = conn or get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM((payload->>'cost_usd')::numeric), 0) "
+            "FROM trace_log "
+            "WHERE user_id = %s AND (%s IS NULL OR ts >= %s)",
+            (user_id, since, since),
+        ).fetchone()
+        return float(row[0]) if row else 0.0
+    finally:
+        if owns:
+            conn.close()
+
+
+def user_event_count(
+    user_id: str,
+    kind_prefix: str,
+    since: datetime,
+    conn: psycopg.Connection | None = None,
+) -> int:
+    """Count a user's trace events of a given kind since a timestamp.
+
+    Quota enforcement counts completed work, so callers should pass the
+    '.end' suffix in kind_prefix (e.g. 'evidence_dossier') and this matches
+    kind LIKE '<prefix>%.end'.
+    """
+    owns = conn is None
+    conn = conn or get_conn()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM trace_log "
+            "WHERE user_id = %s AND kind LIKE %s AND ts >= %s",
+            (user_id, f"{kind_prefix}%.end", since),
+        ).fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        if owns:
+            conn.close()

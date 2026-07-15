@@ -103,7 +103,7 @@ with tab_brand:
                 st.rerun()
 
     col_l, col_r = st.columns(2)
-    name = col_l.text_input("Name", value=st.session_state.get("brand_name", "Nikki"))
+    name = col_l.text_input("Name", value=st.session_state.get("brand_name", "Ada Lovelace"))
     title = col_r.text_input("Title", value=st.session_state.get("brand_title", "Software Engineer"))
     about = st.text_area(
         "About",
@@ -128,11 +128,11 @@ with tab_brand:
     c1, c2 = st.columns(2)
     github_url   = c1.text_input(
         "GitHub",
-        value=st.session_state.get("brand_github", "http://github.com/huhu42"),
+        value=st.session_state.get("brand_github", "https://github.com/username"),
     )
     linkedin_url = c2.text_input(
         "LinkedIn",
-        value=st.session_state.get("brand_linkedin", "https://www.linkedin.com/in/nikkihu/"),
+        value=st.session_state.get("brand_linkedin", "https://www.linkedin.com/in/username/"),
     )
     c3, c4 = st.columns(2)
     scholar_url  = c3.text_input("Google Scholar", value=st.session_state.get("brand_scholar", ""))

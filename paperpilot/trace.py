@@ -1,8 +1,9 @@
 """Trace event helper.
 
 This is our redundancy against Lapdog. Every meaningful agent step calls
-log_event(); rows land in ClickHouse trace_log AND we keep them in process
-memory so the Streamlit UI can render them live without round-tripping to CH.
+log_event(); rows land in Supabase trace_log AND we keep them in process
+memory so the Streamlit UI can render them live without round-tripping to
+the database.
 
 Multi-tenancy: every session is bound to a user_id at creation time.
 Subsequent log_event / step calls automatically attach that user_id to
@@ -11,7 +12,6 @@ trace_log inserts so reads can be filtered per user.
 
 from __future__ import annotations
 
-import logging
 import os
 import uuid
 from contextlib import contextmanager
@@ -19,17 +19,31 @@ from dataclasses import dataclass
 from time import time
 from typing import Any, Iterator
 
-from paperpilot.clickhouse_client import insert_trace
+from paperpilot.redaction import REDACTED, SENSITIVE_KEYS, redact_text
+from paperpilot.supabase_client import insert_trace
 
 
-# clickhouse_connect prints "Unexpected Http Driver Exception" to a logger
-# before raising; silence it so half-configured local runs are not noisy.
-logging.getLogger("clickhouse_connect.driver.httpclient").setLevel(logging.CRITICAL)
-logging.getLogger("clickhouse_connect").setLevel(logging.CRITICAL)
+def _ledger_configured() -> bool:
+    """True when a Supabase connection string is available to write traces to."""
+    return bool(os.environ.get("SUPABASE_DB_URL"))
 
 
-def _clickhouse_configured() -> bool:
-    return bool(os.environ.get("CLICKHOUSE_HOST"))
+def _scrub(value: Any) -> Any:
+    """Recursively redact credentials from a trace payload before it is stored.
+
+    trace_log.payload is free-form jsonb; without this, a key passed into any
+    step(...) kwarg would be persisted forever.
+    """
+    if isinstance(value, dict):
+        return {
+            k: (REDACTED if str(k).lower() in SENSITIVE_KEYS else _scrub(v))
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_scrub(v) for v in value]
+    if isinstance(value, str):
+        return redact_text(value)
+    return value
 
 
 @dataclass
@@ -40,7 +54,8 @@ class TraceEvent:
     payload: dict[str, Any]
 
 
-# In-process buffer keyed by session_id so the UI can render without CH round-trip.
+# In-process buffer keyed by session_id so the UI can render without a
+# round-trip to the database.
 _BUFFER: dict[str, list[TraceEvent]] = {}
 
 # Session-id -> user_id binding established at new_session() time. log_event
@@ -67,20 +82,42 @@ def session_user(session_id: str) -> str:
     return _SESSION_USER.get(session_id, "")
 
 
+def bind_session(session_id: str, user_id: str) -> str:
+    """Bind an existing session_id to user_id and return it unchanged.
+
+    Use this when a caller supplies its own session_id (rather than one
+    minted by new_session) and that id must still resolve to a user for
+    log_event/user_event_count purposes -- e.g. a Merit-key-billed surface
+    that must not let a non-empty caller-supplied session_id bypass
+    user-binding (and therefore quota counting) the way an unregistered
+    session_id silently would. Idempotent: binding the same session_id to
+    the same user_id twice is a no-op, so callers that thread one sid
+    through several steps (e.g. build_dossier -> draft_criterion_narrative)
+    can safely call this more than once without minting a second session.
+    """
+    if not user_id:
+        raise ValueError("user_id is required to bind a session")
+    _SESSION_USER[session_id] = user_id
+    return session_id
+
+
 def log_event(session_id: str, kind: str, payload: dict[str, Any]) -> None:
-    """Record one agent step. Best-effort writes to ClickHouse; never raises.
+    """Record one agent step. Best-effort writes to Supabase; never raises.
 
     user_id for the trace_log row is resolved from the session binding set
     by new_session(). Sessions created outside that helper produce rows
-    with an empty user_id (legacy/system path).
+    with a NULL user_id (legacy/system path) -- trace_log.user_id is a uuid
+    column, so an unbound session must write NULL, not the empty string.
     """
     evt = TraceEvent(session_id=session_id, ts=time(), kind=kind, payload=payload)
     _BUFFER.setdefault(session_id, []).append(evt)
-    if not _clickhouse_configured():
+    if not _ledger_configured():
         return
-    user_id = _SESSION_USER.get(session_id, "")
+    # trace_log.user_id is a uuid column: an unbound session must write NULL,
+    # not the empty string, or the insert fails on the cast.
+    user_id = _SESSION_USER.get(session_id) or None
     try:
-        insert_trace(session_id, user_id, kind, payload)
+        insert_trace(session_id, user_id, kind, _scrub(payload))
     except Exception as exc:  # noqa: BLE001 -- best-effort; never fail the run
         # Surface but don't crash. The buffer still has the event.
         evt.payload.setdefault("_warn", []).append(f"trace_insert_failed: {exc!s}")
