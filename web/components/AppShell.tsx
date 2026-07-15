@@ -115,6 +115,18 @@ export function AppShell({ children }: AppShellProps) {
         {children}
       </main>
 
+      <footer className="border-t border-black/5 px-5 py-6">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 text-xs text-muted">
+          <span>Merit is a document preparation tool, not a law firm.</span>
+          <Link
+            href="/privacy"
+            className="font-medium text-muted underline-offset-2 hover:text-ink hover:underline"
+          >
+            Privacy policy
+          </Link>
+        </div>
+      </footer>
+
       <HelpAssistant />
     </div>
   );

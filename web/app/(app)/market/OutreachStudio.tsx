@@ -13,6 +13,7 @@ import {
   Spinner,
   Textarea,
 } from "@/components/ui";
+import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 
 /**
  * Outreach purposes accepted by the backend (OutreachGenerateRequest.purpose).
@@ -501,71 +502,74 @@ export function OutreachStudio({ onStepChange }: OutreachStudioProps) {
       </Card>
 
       {cards.length > 0 ? (
-        <div className="grid gap-5 lg:grid-cols-2">
-          {cards.map((card, index) => {
-            const key = card.draftId || `${card.channel}-${index}`;
-            const body = bodyFor(card, key);
-            return (
-              <Card key={key} interactive>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone="primary">{card.channel || "Draft"}</Badge>
-                    {card.contentTypeId ? (
-                      <Badge tone="neutral">{card.contentTypeId}</Badge>
-                    ) : null}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void copyCard(key, body)}
-                    disabled={!body}
-                  >
-                    {copiedId === key ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                {card.error ? (
-                  <p className="text-sm text-danger">{card.error}</p>
-                ) : (
-                  <>
-                    <Textarea
-                      name={`draft-${key}`}
-                      label="Edit before sending"
-                      className="min-h-56 font-sans text-sm leading-relaxed"
-                      value={body}
-                      onChange={(e) =>
-                        setEdited((prev) => ({ ...prev, [key]: e.target.value }))
-                      }
-                    />
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void handleSend(card, key)}
-                        disabled={!emailReady || !body.trim()}
-                      >
-                        Open in email
-                      </Button>
-                      {!toEmail.trim() ? (
-                        <span className="text-xs text-muted">
-                          Add a recipient email above to send.
-                        </span>
-                      ) : !emailReady ? (
-                        <span className="text-xs text-muted">
-                          That email does not look valid yet.
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted">
-                          Opens your mail app to {toEmail}. You review and
-                          send it yourself.
-                        </span>
-                      )}
+        <div className="flex flex-col gap-4">
+          <LegalDisclaimer />
+          <div className="grid gap-5 lg:grid-cols-2">
+            {cards.map((card, index) => {
+              const key = card.draftId || `${card.channel}-${index}`;
+              const body = bodyFor(card, key);
+              return (
+                <Card key={key} interactive>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="primary">{card.channel || "Draft"}</Badge>
+                      {card.contentTypeId ? (
+                        <Badge tone="neutral">{card.contentTypeId}</Badge>
+                      ) : null}
                     </div>
-                  </>
-                )}
-              </Card>
-            );
-          })}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void copyCard(key, body)}
+                      disabled={!body}
+                    >
+                      {copiedId === key ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                  {card.error ? (
+                    <p className="text-sm text-danger">{card.error}</p>
+                  ) : (
+                    <>
+                      <Textarea
+                        name={`draft-${key}`}
+                        label="Edit before sending"
+                        className="min-h-56 font-sans text-sm leading-relaxed"
+                        value={body}
+                        onChange={(e) =>
+                          setEdited((prev) => ({ ...prev, [key]: e.target.value }))
+                        }
+                      />
+                      <div className="mt-3 flex flex-wrap items-center gap-3">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void handleSend(card, key)}
+                          disabled={!emailReady || !body.trim()}
+                        >
+                          Open in email
+                        </Button>
+                        {!toEmail.trim() ? (
+                          <span className="text-xs text-muted">
+                            Add a recipient email above to send.
+                          </span>
+                        ) : !emailReady ? (
+                          <span className="text-xs text-muted">
+                            That email does not look valid yet.
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted">
+                            Opens your mail app to {toEmail}. You review and
+                            send it yourself.
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
         </div>
       ) : hasGenerated && !genError ? (
         <Card>
