@@ -1,16 +1,45 @@
 # Merit
 
-Three agentic surfaces on one stack: turn your GitHub repo into a research paper, draft your personal-brand outreach for it, and track your O-1 / National Interest Waiver visa progress against the USCIS criteria. Every LLM call traced.
+Merit turns a GitHub repo into a research paper draft, drafts personal-brand outreach copy for the person behind it, and tracks an O-1A extraordinary-ability visa petition against the 8 USCIS criteria -- three agentic surfaces on one stack, every LLM call traced.
 
-Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ. Live at **https://paperpilot-production-97dc.up.railway.app**.
+## The one key you need
 
-**Post-hackathon (2026-05-24):** hardened for two real users (Andre + Nikki) with passcode auth, per-user data isolation across ClickHouse, an O-1A Evidence Ledger that replaces the heuristic gauge with declared evidence against the 8 USCIS criteria, per-criterion narrative drafting, and a reportlab-rendered PDF dossier for attorney handoff. Productize + Market kept their hackathon shapes; Track was rebuilt around real petition workflow.
+Merit calls three model providers: Google for repo ingest, Anthropic for drafting, and OpenAI for embeddings. No single provider key can run the pipeline. One **Vercel AI Gateway** key routes to all three.
+
+Get one free at https://vercel.com/dashboard/ai-gateway.
+
+Senso (brand-kit tone retrieval) and Nimble (contact discovery) are optional enhancements layered on top. Nothing breaks without them -- Merit falls back to a direct LLM call and hides the affected UI elements when their keys are unset.
+
+## Run it
+
+```bash
+git clone https://github.com/AndreChuabio/MeritAI.git
+cd MeritAI
+cp .env.example .env
+# Put your AI_GATEWAY_API_KEY in .env. That is the only required key.
+uv sync
+make test
+
+# FastAPI backend + Next.js web app (the primary, modern surface):
+make api                              # backend on :8000
+cd web && npm install && npm run dev  # frontend on :3000, needs web/.env.example filled in
+```
+
+The backend also needs Supabase configured (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, etc. in `.env`) for auth and persistence -- see `.env.example`. The original hackathon-era Streamlit app (`make dev`) still runs and is documented under "Quickstart" below; it is a separate, legacy surface that additionally needs ClickHouse.
+
+## What this is not
+
+Merit is a document-preparation tool. It drafts research papers, outreach messages, and O-1A petition narratives for a human to review, edit, and use -- it is not a law firm, it does not practice law, and nothing it generates is legal advice. See the in-app disclaimers and the privacy policy (`web/app/privacy`) for what is stored and who submitted content is shared with.
+
+---
+
+Built at the **Agentic Engineering Hack NYC**, 2026-05-23, at Datadog HQ. Hardened after the hackathon for multi-tenant use: passcode/Supabase auth, per-user data isolation, bring-your-own-key billing (Merit never stores or logs a caller's API key), an O-1A Evidence Ledger that replaces the heuristic gauge with declared evidence against the 8 USCIS criteria, per-criterion narrative drafting, and a reportlab-rendered PDF dossier for attorney handoff.
 
 ---
 
 ## What it does
 
-A three-page Streamlit app (`Productize.py` entry + `pages/Market.py` + `pages/Track.py`) on a shared agentic spine.
+The section below describes the original three-page Streamlit app (`Productize.py` entry + `pages/Market.py` + `pages/Track.py`), which the post-hackathon `backend/` (FastAPI) + `web/` (Next.js) rebuild carries forward on the same agentic spine with BYOK auth and Supabase persistence. The underlying pipeline logic (`paperpilot/`) is shared by both surfaces.
 
 ### Productize -- repo to paper draft for a matched venue
 
@@ -164,6 +193,8 @@ The runner reads every `.sql` file in lexicographic order, strips SQL comments, 
 ---
 
 ## Quickstart
+
+This section covers the legacy Streamlit surface (`make dev`). For the primary FastAPI + Next.js surface, see "Run it" at the top of this file -- it needs only `AI_GATEWAY_API_KEY` plus Supabase, not ClickHouse.
 
 ```bash
 # 0. Prereqs: macOS, uv, brew, gh CLI.

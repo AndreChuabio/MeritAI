@@ -92,7 +92,7 @@ def main() -> None:
         sections = stop.value
     print()
 
-    tex, bib = export_paper(summary, venue, sections, authors="Senor Clown and Nikki")
+    tex, bib = export_paper(summary, venue, sections, authors="Merit Contributors")
     SUBMISSION_DIR.mkdir(exist_ok=True)
     (SUBMISSION_DIR / "paperpilot.tex").write_text(tex)
     (SUBMISSION_DIR / "references.bib").write_text(bib)

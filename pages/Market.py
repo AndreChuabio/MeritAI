@@ -103,7 +103,7 @@ with tab_brand:
                 st.rerun()
 
     col_l, col_r = st.columns(2)
-    name = col_l.text_input("Name", value=st.session_state.get("brand_name", "Nikki"))
+    name = col_l.text_input("Name", value=st.session_state.get("brand_name", "Ada Lovelace"))
     title = col_r.text_input("Title", value=st.session_state.get("brand_title", "Software Engineer"))
     about = st.text_area(
         "About",
