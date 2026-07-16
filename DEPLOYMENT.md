@@ -14,6 +14,13 @@ they don't.
   `develop` (and on direct pushes to either) — backend `pytest`, frontend
   lint/typecheck/build, then a Playwright E2E smoke suite
   (`web/e2e/smoke.spec.ts`) against every route.
+- **Branch protection**: for CI to actually block a bad merge (not just
+  report red after the fact), `develop` (and ideally `main`) need a GitHub
+  branch protection rule requiring the three `ci.yml` job names — **Backend
+  tests**, **Frontend lint, typecheck, build**, **Frontend E2E smoke
+  tests** — to pass before merging. Set this up under repo Settings →
+  Branches → Add branch protection rule. Without it, checks run and report
+  status but a PR can still be merged while they're red.
 
 ## Branch previews (the part that broke, and the fix)
 
@@ -47,17 +54,55 @@ within about a minute. Feature branches also get their own one-off preview
 URLs the same way; check the Vercel dashboard or the PR's Vercel status
 check for the link.
 
+## Root Directory (the other part that broke)
+
+Vercel's project setting **Settings → General → Root Directory** must be
+`web` — that's where the actual Next.js app lives; the repo root also has an
+unrelated legacy `pages/` folder (Python files for the old Streamlit app)
+that looks superficially like a Next.js Pages Router directory. If Root
+Directory ever gets reset to blank/`./`, Vercel builds from the repo root
+instead, Next.js finds no real routes, and every page 404s. The build log
+gives it away immediately: a broken build's "Route" summary shows only
+`Route (pages) ─ ○ /404`; a working one shows `Route (app)` with every real
+page (`/`, `/cfp`, `/login`, etc.) listed. If every route 404s in production
+but CI's `npm run build` job is green, check this setting first — CI always
+builds from `web/` explicitly and will never catch a Root Directory drift.
+
+This has already happened once (root-caused to an ad-hoc deployment made
+without specifying `rootDirectory`, which appears to reset the project's
+persisted setting as a side effect). If you're deploying manually outside
+the normal git-push flow, always pin the root directory explicitly.
+
+## Supabase Auth redirect URLs
+
+Any Supabase Auth flow that redirects back into the app (password reset via
+`resetPasswordForEmail`, magic links, OAuth) only honors a `redirectTo` URL
+that's on the project's allowlist. An unlisted URL is silently swapped for
+the configured Site URL instead — which will send a tester's password-reset
+email to `localhost:3000` instead of whatever preview they're actually
+testing. Add these to Supabase dashboard → **Authentication → URL
+Configuration → Redirect URLs**:
+
+```
+https://merit-ai-git-develop-andre-chuabios-projects.vercel.app/**
+https://merit-ai-git-*-andre-chuabios-projects.vercel.app/**   # every branch preview
+https://<your-production-domain>/**
+```
+
 ## What to do for a new feature branch
 
 1. Branch off `develop`, do the work, push.
 2. Vercel auto-builds a preview at a branch-specific URL — no action needed.
 3. Open a PR into `develop`. CI runs automatically (see above) and the PR
-   gets a Vercel preview-deployment status check.
-4. `develop` periodically merges into `main` (production) once it's in a
-   good state.
+   gets a Vercel preview-deployment status check; Vercel also comments the
+   exact preview URL on the PR.
 4. If you want a shared, always-current URL for the team to poke at
    mid-development (not tied to a specific PR), merge/rebase into `develop`
    and use the stable alias above.
+5. `develop` periodically merges into `main` (production) once it's in a
+   good state — via a dedicated promotion PR, not ad-hoc pushes. `main`
+   should only ever receive changes that have already been verified on
+   `develop`.
 
 ## Local reproduction
 
