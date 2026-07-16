@@ -10,10 +10,10 @@ they don't.
   (`AndreChuabio/MeritAI`) via Vercel's native GitHub integration.
 - **Backend** (`backend/`, FastAPI): deployed separately on Railway
   (`paperpilot-api-production.up.railway.app`), not covered by this doc.
-- **CI**: `.github/workflows/ci.yml` runs on every PR into `main` (and on
-  direct pushes to `main`) — backend `pytest`, frontend lint/typecheck/build,
-  then a Playwright E2E smoke suite (`web/e2e/smoke.spec.ts`) against every
-  route.
+- **CI**: `.github/workflows/ci.yml` runs on every PR into `main` or
+  `develop` (and on direct pushes to either) — backend `pytest`, frontend
+  lint/typecheck/build, then a Playwright E2E smoke suite
+  (`web/e2e/smoke.spec.ts`) against every route.
 
 ## Branch previews (the part that broke, and the fix)
 
@@ -49,9 +49,12 @@ check for the link.
 
 ## What to do for a new feature branch
 
-1. Branch off `develop` (or `main`), do the work, push.
+1. Branch off `develop`, do the work, push.
 2. Vercel auto-builds a preview at a branch-specific URL — no action needed.
-3. Open a PR into `main` when ready. CI runs automatically (see above).
+3. Open a PR into `develop`. CI runs automatically (see above) and the PR
+   gets a Vercel preview-deployment status check.
+4. `develop` periodically merges into `main` (production) once it's in a
+   good state.
 4. If you want a shared, always-current URL for the team to poke at
    mid-development (not tied to a specific PR), merge/rebase into `develop`
    and use the stable alias above.
