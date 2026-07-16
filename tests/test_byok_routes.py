@@ -57,8 +57,13 @@ def test_byok_routes_reject_missing_key():
         app.dependency_overrides.clear()
 
 
-def test_track_route_does_not_require_llm_key():
+def test_track_route_does_not_require_llm_key(monkeypatch):
     """A Track route (evidence ledger) must not 400 for a missing X-LLM-Key."""
+    from backend.routers import evidence as evidence_router
+
+    monkeypatch.setattr(
+        evidence_router.evidence_service, "evidence_by_criterion", lambda user_id: {}
+    )
     app.dependency_overrides[get_current_user] = lambda: _USER
     try:
         with TestClient(app) as client:
