@@ -106,6 +106,15 @@ function LoginForm() {
           Create an account
         </Link>
       </p>
+
+      <p className="mt-2 text-center text-sm text-muted">
+        <Link
+          href="/forgot-password"
+          className="font-medium text-muted underline-offset-2 hover:text-ink hover:underline"
+        >
+          Forgot your password?
+        </Link>
+      </p>
     </Card>
   );
 }
