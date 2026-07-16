@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * Refreshes the Supabase session on every request and redirects
  * unauthenticated users away from the protected (app) routes to /login.
  */
-const PROTECTED_PREFIXES = ["/productize", "/track", "/market"];
+const PROTECTED_PREFIXES = ["/productize", "/track", "/market", "/cfp"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
