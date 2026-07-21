@@ -87,7 +87,7 @@ export default function PrivacyPage() {
                 is also sent to Senso (drafting) and Nimble (finding contacts
                 and looking up public scholar profile data). These
                 integrations are off unless the operator sets a Senso or
-                Nimble API key; on Merit's own hosted deployment, both are
+                Nimble API key; on Merit&apos;s own hosted deployment, both are
                 configured. Merit does not sell your data and has no
                 advertisers.
               </p>
